@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="description" content="OlasTech Link — Premium High-Speed WiFi Access">
+  <title>OlasTech Link — Dashboard</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚀</text></svg>">
+</head>
+<body>
+
+  <!-- Advanced Background -->
+  <div class="bg-canvas" aria-hidden="true"></div>
+  <div class="particles" id="particles"></div>
+
+  <!-- Cyber Ticker -->
+  <div class="ticker-wrap" aria-label="Announcements">
+    <div class="ticker-content">
+      <div class="ticker-item">SYSTEM STATUS: <span>OPTIMAL [99.9% UPTIME]</span></div>
+      <div class="ticker-item">SPEED PROTOCOL: <span>GIGABIT ENABLED ⚡️</span></div>
+      <div class="ticker-item">PROMO: <span>GET 20% EXTRA DATA ON ALL PLANS 🎁</span></div>
+      <div class="ticker-item">SUPPORT: <span>CALL 0800-OLASTECH 📞</span></div>
+      <div class="ticker-item">SYSTEM STATUS: <span>OPTIMAL [99.9% UPTIME]</span></div>
+      <div class="ticker-item">SPEED PROTOCOL: <span>GIGABIT ENABLED ⚡️</span></div>
+      <div class="ticker-item">PROMO: <span>GET 20% EXTRA DATA ON ALL PLANS 🎁</span></div>
+      <div class="ticker-item">SUPPORT: <span>CALL 0800-OLASTECH 📞</span></div>
+    </div>
+  </div>
+
+  <div class="layout-wrapper">
+    
+    <!-- Sidebar Dashboard Widgets -->
+    <aside class="ad-sidebar">
+      
+      <!-- Network Status Widget -->
+      <div class="widget-card tilt-element">
+        <div class="widget-header">
+          <span>Network Diagnostics</span>
+          <div class="pulsing-dot"></div>
+        </div>
+        <div class="network-stats">
+          <div class="stat-row">
+            <span class="stat-label">Current Load</span>
+            <span class="stat-value highlight">24%</span>
+          </div>
+          <div class="stat-bar-bg"><div class="stat-bar-fill"></div></div>
+          
+          <div style="margin-top: 12px; display: flex; justify-content: space-between;">
+            <div>
+              <div class="stat-label" style="font-size: 0.7rem;">PING</div>
+              <div class="stat-value" style="font-size: 1rem; color: var(--color-success);">12ms</div>
+            </div>
+            <div style="text-align: right;">
+              <div class="stat-label" style="font-size: 0.7rem;">CAPACITY</div>
+              <div class="stat-value" style="font-size: 1rem;">1000 Mbps</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Promo Widget -->
+      <div class="widget-card promo-card tilt-element">
+        <div class="widget-header" style="color: #fff;">
+          <span>Premium Offer</span>
+        </div>
+        <h3>OlasTech For Business</h3>
+        <p>Zero downtime. Dedicated support. Custom enterprise routing protocols.</p>
+        <a href="#" class="btn-outline">
+          Upgrade Hub
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+        </a>
+      </div>
+
+    </aside>
+
+    <!-- Main Portal -->
+    <main class="portal-container" role="main">
+      <div class="portal-card tilt-element" id="portalCard">
+
+        <!-- Brand Header -->
+        <header class="brand-header">
+          <div class="brand-logo">
+            <div class="logo-icon">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+            </div>
+            <div class="logo-text">
+              <h1>OlasTech Link</h1>
+              <span class="tagline">Hyper-Fast Access Node</span>
+            </div>
+          </div>
+
+          <div class="wifi-badge">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 20h.01"/><path d="M5 12.859a10 10 0 0 1 14 0"/><path d="M8.5 16.429a5 5 0 0 1 7 0"/>
+            </svg>
+            <span id="ssidDisplay">OlasTech_WiFi</span>
+            <div class="pulse-dot"></div>
+          </div>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="view-tabs" role="tablist">
+          <button class="tab-btn active" id="tabCode" role="tab" aria-selected="true" aria-controls="panelCode" data-tab="code">
+            Enter Token
+          </button>
+          <button class="tab-btn" id="tabBuy" role="tab" aria-selected="false" aria-controls="panelBuy" data-tab="buy">
+            Purchase Data
+          </button>
+        </div>
+
+        <!-- Error / Success Messages -->
+        <div class="error-message" id="errorMessage" role="alert">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>
+          <span id="errorText">Invalid access token.</span>
+        </div>
+        <div class="success-message" id="successMessage" role="status">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          <span id="successText">Token verified.</span>
+        </div>
+
+        <!-- ═══════════ PANEL: Enter Access Code ═══════════ -->
+        <div class="view-panel active" id="panelCode" role="tabpanel" aria-labelledby="tabCode">
+          <form id="codeForm" novalidate>
+            <div class="input-wrapper">
+              <input type="text" id="accessCode" name="accessCode" placeholder=" " autocomplete="off" spellcheck="false" maxlength="20" required>
+              <label for="accessCode">Enter Access Token</label>
+            </div>
+            <button type="submit" class="btn-primary" id="connectBtn" disabled>
+              Initialize Connection
+            </button>
+          </form>
+          <p class="help-text">
+            Provide the 8-character token issued to you.<br>
+            Don't have one? <a href="#" id="switchToBuy">Acquire a plan</a>
+          </p>
+        </div>
+
+        <!-- ═══════════ PANEL: Buy Access Code ═══════════ -->
+        <div class="view-panel" id="panelBuy" role="tabpanel" aria-labelledby="tabBuy">
+          <div class="plans-grid" id="plansGrid">
+            <!-- Plan 300GB -->
+            <div class="plan-card" data-tier="300gb" data-plan="300gb" data-price="35000" tabindex="0">
+              <div class="plan-top">
+                <span class="plan-name">300GB Plan</span>
+                <span class="plan-badge best-value">Best Value</span>
+              </div>
+              <div class="plan-details">
+                <span class="plan-price"><span class="currency">₦</span>35,000</span>
+                <div class="plan-meta">
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> 10 Devices</span>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg> 300 GB</span>
+                </div>
+              </div>
+            </div>
+            <!-- Plan 250GB -->
+            <div class="plan-card" data-tier="250gb" data-plan="250gb" data-price="20000" tabindex="0">
+              <div class="plan-top">
+                <span class="plan-name">250GB Plan</span>
+              </div>
+              <div class="plan-details">
+                <span class="plan-price"><span class="currency">₦</span>20,000</span>
+                <div class="plan-meta">
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> 5 Devices</span>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg> 250 GB</span>
+                </div>
+              </div>
+            </div>
+            <!-- Plan 150GB -->
+            <div class="plan-card" data-tier="150gb" data-plan="150gb" data-price="15000" tabindex="0">
+              <div class="plan-top">
+                <span class="plan-name">150GB Plan</span>
+              </div>
+              <div class="plan-details">
+                <span class="plan-price"><span class="currency">₦</span>15,000</span>
+                <div class="plan-meta">
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> 4 Devices</span>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg> 150 GB</span>
+                </div>
+              </div>
+            </div>
+            <!-- Plan 110GB -->
+            <div class="plan-card" data-tier="110gb" data-plan="110gb" data-price="12000" tabindex="0">
+              <div class="plan-top">
+                <span class="plan-name">110GB Plan</span>
+                <span class="plan-badge popular">Popular</span>
+              </div>
+              <div class="plan-details">
+                <span class="plan-price"><span class="currency">₦</span>12,000</span>
+                <div class="plan-meta">
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> 4 Devices</span>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg> 110 GB</span>
+                </div>
+              </div>
+            </div>
+            <!-- Plan 50GB -->
+            <div class="plan-card" data-tier="50gb" data-plan="50gb" data-price="5000" tabindex="0">
+              <div class="plan-top">
+                <span class="plan-name">50GB Plan</span>
+              </div>
+              <div class="plan-details">
+                <span class="plan-price"><span class="currency">₦</span>5,000</span>
+                <div class="plan-meta">
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> 4 Devices</span>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg> 50 GB</span>
+                </div>
+              </div>
+            </div>
+            <!-- Plan Weekend -->
+            <div class="plan-card" data-tier="weekend" data-plan="weekend" data-price="10000" tabindex="0">
+              <div class="plan-top">
+                <span class="plan-name">Weekend Unltd</span>
+              </div>
+              <div class="plan-details">
+                <span class="plan-price"><span class="currency">₦</span>10,000</span>
+                <div class="plan-meta">
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> 5 Devices</span>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 48 Hr</span>
+                </div>
+              </div>
+            </div>
+            <!-- Plan Daily -->
+            <div class="plan-card" data-tier="daily" data-plan="daily" data-price="3000" tabindex="0">
+              <div class="plan-top">
+                <span class="plan-name">Daily Unltd</span>
+              </div>
+              <div class="plan-details">
+                <span class="plan-price"><span class="currency">₦</span>3,000</span>
+                <div class="plan-meta">
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> 3 Devices</span>
+                  <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> 24 Hr</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="payment-methods">
+          <span>Secured By</span>
+          <div class="payment-icons">
+            <div class="payment-icon">Flutterwave</div>
+          </div>
+        </div>
+
+        <div class="input-wrapper" style="margin-top: 24px;">
+          <input type="email" id="buyEmail" name="buyEmail" placeholder=" " autocomplete="email" spellcheck="false" required>
+          <label for="buyEmail">Email Address (For Receipts & Alerts)</label>
+        </div>
+
+        <button type="button" class="btn-primary btn-buy" id="btnBuy" disabled>
+          Authorize Payment
+        </button>
+      </div>
+          <p class="help-text">Already possess a token? <a href="#" id="switchToCode">Authenticate here</a></p>
+        </div>
+
+
+      </div>
+    </main>
+
+    <!-- Info Modal Template -->
+    <div class="modal-overlay" id="infoModal">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3 id="modalTitle">Title</h3>
+          <button class="modal-close" id="modalClose">&times;</button>
+        </div>
+        <div class="modal-body" id="modalBody">
+          Content
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Footer (Moved to bottom) -->
+  <footer class="portal-footer" style="padding: 24px; text-align: center; border-top: none;">
+    <div class="brand-footer">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:16px;height:16px"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+      <span>OlasTech Core</span>
+    </div>
+    <p class="powered-by">Encrypted Connection · Omada Auth System V2.1</p>
+    <div class="footer-links">
+      <a href="#" id="linkAbout">About Us</a>
+      <span class="dot">•</span>
+      <a href="#" id="linkTerms">Terms of Service</a>
+      <span class="dot">•</span>
+      <a href="#" id="linkContact">Contact Us</a>
+    </div>
+  </footer>
+
+  <!-- Success Overlay -->
+  <div class="success-overlay" id="successOverlay">
+    <div class="success-icon-wrap"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></div>
+    <h2>ACCESS GRANTED</h2>
+    <p>Secure connection established.</p>
+    <div class="session-info">
+      <div class="session-item"><div class="session-label">Node</div><div class="session-value" id="sessionPlan">—</div></div>
+      <div class="session-item"><div class="session-label">Time</div><div class="session-value" id="sessionDuration">—</div></div>
+      <div class="session-item"><div class="session-label">Bandwidth</div><div class="session-value" id="sessionData">—</div></div>
+    </div>
+  </div>
+
+  <!-- 3D Tilt Script & Particles -->
+  <script>
+    // 3D Tilt Effect for Desktop
+    const tiltElements = document.querySelectorAll('.tilt-element');
+    tiltElements.forEach(el => {
+      el.addEventListener('mousemove', e => {
+        if (window.innerWidth < 850) return; // Disable on mobile
+        const rect = el.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+        const rotateX = ((y - centerY) / centerY) * -5; // max 5 deg tilt
+        const rotateY = ((x - centerX) / centerX) * 5;
+        el.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale3d(1.02, 1.02, 1.02)`;
+      });
+      el.addEventListener('mouseleave', () => {
+        el.style.transform = `perspective(1000px) rotateX(0deg) rotateY(0deg) scale3d(1, 1, 1)`;
+      });
+    });
+
+    // Generate floating particles
+    const particlesContainer = document.getElementById('particles');
+    for(let i = 0; i < 20; i++) {
+      const p = document.createElement('div');
+      p.className = 'particle';
+      p.style.left = `${Math.random() * 100}%`;
+      p.style.animationDuration = `${10 + Math.random() * 20}s`;
+      p.style.animationDelay = `${Math.random() * 10}s`;
+      particlesContainer.appendChild(p);
+    }
+  </script>
+
+  <script src="https://checkout.flutterwave.com/v3.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

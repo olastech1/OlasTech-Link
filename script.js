@@ -1,0 +1,441 @@
+/**
+ * OlasTech Link — Frontend Controller (Production)
+ * =================================================
+ * Calls the real backend API for payments and code validation.
+ * Uses Paystack Inline JS for the payment popup.
+ */
+
+(function () {
+  'use strict';
+
+  // ── Plan Data (mirrors server) ────────────────────────────────
+  const PLANS = {
+    '300gb':   { name: '300GB',           price: 35000, duration: '30 Days',  data: '300 GB',    devices: 10 },
+    '250gb':   { name: '250GB',           price: 20000, duration: '30 Days',  data: '250 GB',    devices: 5 },
+    '150gb':   { name: '150GB',           price: 15000, duration: '30 Days',  data: '150 GB',    devices: 4 },
+    '110gb':   { name: '110GB',           price: 12000, duration: '30 Days',  data: '110 GB',    devices: 4 },
+    '50gb':    { name: '50GB',            price: 5000,  duration: '30 Days',  data: '50 GB',     devices: 4 },
+    'weekend': { name: 'Weekend Unltd',   price: 10000, duration: '48 Hours', data: 'Unlimited', devices: 5 },
+    'daily':   { name: 'Daily Unltd',     price: 3000,  duration: '24 Hours', data: 'Unlimited', devices: 3 },
+  };
+
+  // ── DOM References ────────────────────────────────────────────
+  const tabCode         = document.getElementById('tabCode');
+  const tabBuy          = document.getElementById('tabBuy');
+  const panelCode       = document.getElementById('panelCode');
+  const panelBuy        = document.getElementById('panelBuy');
+  const codeForm        = document.getElementById('codeForm');
+  const accessCodeInput = document.getElementById('accessCode');
+  const connectBtn      = document.getElementById('connectBtn');
+  const btnBuy          = document.getElementById('btnBuy');
+  const buyEmail        = document.getElementById('buyEmail');
+  const plansGrid       = document.getElementById('plansGrid');
+  const manualPaymentPanel = document.getElementById('manualPaymentPanel');
+  const manualAmountDisplay= document.getElementById('manualAmountDisplay');
+  const whatsappBtn     = document.getElementById('whatsappBtn');
+  const cancelManualBtn = document.getElementById('cancelManualBtn');
+  const errorMessage    = document.getElementById('errorMessage');
+  const errorText       = document.getElementById('errorText');
+  const successMessage  = document.getElementById('successMessage');
+  const successText     = document.getElementById('successText');
+  const successOverlay  = document.getElementById('successOverlay');
+  const ssidDisplay     = document.getElementById('ssidDisplay');
+  const switchToBuy     = document.getElementById('switchToBuy');
+  const switchToCode    = document.getElementById('switchToCode');
+  const sessionPlan     = document.getElementById('sessionPlan');
+  const sessionDuration = document.getElementById('sessionDuration');
+  const sessionData     = document.getElementById('sessionData');
+
+  function showSuccess(sessionInfo) {
+    const successOverlay = document.getElementById('successOverlay');
+    const displayPlanName = document.getElementById('displayPlanName');
+    const displayDuration = document.getElementById('displayDuration');
+    const displayData = document.getElementById('displayData');
+    
+    displayPlanName.textContent = sessionInfo.plan;
+
+    // Calculate Remaining Time
+    if (sessionInfo.sessionExpires) {
+      const expires = new Date(sessionInfo.sessionExpires);
+      const diffMs = expires - new Date();
+      if (diffMs > 0) {
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        let timeText = '';
+        if (diffDays > 0) timeText += diffDays + ' Days ';
+        timeText += diffHours + ' Hours';
+        displayDuration.textContent = timeText;
+      } else {
+        displayDuration.textContent = 'Expired';
+      }
+    } else {
+      displayDuration.textContent = sessionInfo.duration_h + ' Hours';
+    }
+
+    // Display Remaining Data
+    if (sessionInfo.remaining_mb !== null && sessionInfo.remaining_mb !== undefined) {
+      displayData.textContent = (sessionInfo.remaining_mb / 1024).toFixed(2) + ' GB';
+    } else if (sessionInfo.data_mb) {
+      displayData.textContent = (sessionInfo.data_mb / 1024).toFixed(2) + ' GB';
+    } else {
+      displayData.textContent = 'Unlimited';
+    }
+
+    successOverlay.classList.add('visible');
+    
+    setTimeout(() => {
+      window.location.reload();
+    }, 5000);
+  }
+
+  // ── Info Modals (About, Terms, Contact) ──────────────────────
+  const infoModal = document.getElementById('infoModal');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalBody = document.getElementById('modalBody');
+  const modalClose = document.getElementById('modalClose');
+
+  const modalContent = {
+    about: {
+      title: 'About OlasTech Link',
+      body: `
+        <p>Welcome to <strong>OlasTech Link</strong>, your premium high-speed internet provider.</p>
+        <p>We leverage advanced enterprise-grade Omada Controller systems to provide seamless, encrypted, and ultra-fast Wi-Fi connections.</p>
+        <p>Our multi-device nodes allow you to share a single access code across your laptops, phones, and smart TVs instantly.</p>
+      `
+    },
+    terms: {
+      title: 'Terms of Service',
+      body: `
+        <h4>1. Acceptable Use</h4>
+        <p>By connecting to this network, you agree not to use the service for any illegal or malicious activities. We reserve the right to monitor bandwidth usage for network stability.</p>
+        <h4>2. Data Usage & Limits</h4>
+        <p>If you exhaust your purchased data quota, your devices will be automatically disconnected. Shared codes count data usage across all connected devices collectively.</p>
+        <h4>3. Refunds</h4>
+        <p>All token purchases are final. If you experience downtime or issues, please contact our support.</p>
+      `
+    },
+    contact: {
+      title: 'Contact Us',
+      body: `
+        <p>Need help with your connection or a token?</p>
+        <p><strong>Phone / WhatsApp:</strong> +234 816 274 7882</p>
+        <p><strong>Email:</strong> support@olastech.ng</p>
+        <p><strong>Operating Hours:</strong> 24/7 Monitoring & Support</p>
+      `
+    }
+  };
+
+  function openModal(type) {
+    if (!modalContent[type]) return;
+    modalTitle.textContent = modalContent[type].title;
+    modalBody.innerHTML = modalContent[type].body;
+    infoModal.classList.add('visible');
+  }
+
+  document.getElementById('linkAbout')?.addEventListener('click', (e) => { e.preventDefault(); openModal('about'); });
+  document.getElementById('linkTerms')?.addEventListener('click', (e) => { e.preventDefault(); openModal('terms'); });
+  document.getElementById('linkContact')?.addEventListener('click', (e) => { e.preventDefault(); openModal('contact'); });
+  
+  modalClose?.addEventListener('click', () => { infoModal.classList.remove('visible'); });
+  infoModal?.addEventListener('click', (e) => {
+    if (e.target === infoModal) infoModal.classList.remove('visible');
+  });
+
+  // ── State ─────────────────────────────────────────────────────
+  let selectedPlan = null;
+  let paystackPublicKey = null;
+
+  // ── TP-Link Omada URL Parameters ──────────────────────────────
+  const params = new URLSearchParams(window.location.search);
+  const portalConfig = {
+    clientMac:   params.get('clientMac')   || params.get('client_mac')   || '',
+    apMac:       params.get('apMac')       || params.get('ap_mac')       || '',
+    ssidName:    params.get('ssidName')    || params.get('ssid')         || 'OlasTech_WiFi',
+    radioId:     params.get('radioId')     || params.get('radio_id')     || '0',
+    redirectUrl: params.get('redirectUrl') || params.get('redirect_url') || 'https://www.google.com',
+  };
+
+  // ── Initialize ────────────────────────────────────────────────
+  function init() {
+    if (portalConfig.ssidName) ssidDisplay.textContent = portalConfig.ssidName;
+
+    // Auto-fill code if coming back from Paystack callback
+    const codeParam = params.get('code');
+    const paidParam = params.get('paid');
+    const errParam  = params.get('error');
+
+    if (codeParam && paidParam) {
+      accessCodeInput.value = codeParam;
+      connectBtn.disabled = false;
+      switchTab('code');
+      showSuccess(`✅ Payment confirmed! Your code: ${codeParam} — Click Connect to go online.`);
+    }
+
+    if (errParam) {
+      switchTab('buy');
+      showError(errorMessages[errParam] || 'Something went wrong. Please try again.');
+    }
+
+    bindEvents();
+  }
+
+  const errorMessages = {
+    payment_failed:    'Payment was not completed. Please try again.',
+    payment_not_found: 'Payment reference not found. Contact support.',
+    missing_reference: 'Payment reference missing. Please try again.',
+  };
+
+  // ── Events ────────────────────────────────────────────────────
+  function bindEvents() {
+    tabCode.addEventListener('click', () => switchTab('code'));
+    tabBuy.addEventListener('click', () => switchTab('buy'));
+    switchToBuy.addEventListener('click', (e) => { e.preventDefault(); switchTab('buy'); });
+    switchToCode.addEventListener('click', (e) => { e.preventDefault(); switchTab('code'); });
+
+    accessCodeInput.addEventListener('input', onCodeInput);
+    codeForm.addEventListener('submit', handleCodeSubmit);
+
+    plansGrid.addEventListener('click', handlePlanClick);
+    plansGrid.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handlePlanClick(e); }
+    });
+
+    if (btnBuy) btnBuy.addEventListener('click', handleBuyClick);
+  }
+
+  // ── Tab Switching ─────────────────────────────────────────────
+  function switchTab(tab) {
+    hideError(); hideSuccess();
+    tabCode.classList.toggle('active', tab === 'code');
+    tabBuy.classList.toggle('active', tab === 'buy');
+    tabCode.setAttribute('aria-selected', tab === 'code');
+    tabBuy.setAttribute('aria-selected', tab === 'buy');
+    panelCode.classList.toggle('active', tab === 'code');
+    panelBuy.classList.toggle('active', tab === 'buy');
+    // Re-trigger panel animation
+    const panel = tab === 'code' ? panelCode : panelBuy;
+    panel.style.animation = 'none';
+    void panel.offsetHeight;
+    panel.style.animation = '';
+    if (tab === 'code') accessCodeInput.focus();
+  }
+
+  // ── Code Input ────────────────────────────────────────────────
+  function onCodeInput() {
+    connectBtn.disabled = accessCodeInput.value.trim().length === 0;
+    accessCodeInput.classList.remove('error');
+    hideError();
+  }
+
+  // ── Code Submission ───────────────────────────────────────────
+  async function handleCodeSubmit(e) {
+    e.preventDefault();
+    const code = accessCodeInput.value.trim().toUpperCase();
+    if (!code) {
+      showError('Please enter your access code.');
+      accessCodeInput.classList.add('error');
+      return;
+    }
+
+    setLoading(connectBtn, true, 'Connecting…');
+    hideError();
+
+    try {
+      const res = await fetch('/api/code/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          code,
+          clientMac: portalConfig.clientMac,
+          apMac:     portalConfig.apMac,
+          radioId:   portalConfig.radioId,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Invalid access code.');
+      }
+
+      onConnected(data);
+    } catch (err) {
+      setLoading(connectBtn, false, 'Connect to Internet');
+      showError(err.message);
+      accessCodeInput.classList.add('error');
+    }
+  }
+
+  // ── Plan Selection ────────────────────────────────────────────
+  function handlePlanClick(e) {
+    const card = e.target.closest('.plan-card');
+    if (!card) return;
+    plansGrid.querySelectorAll('.plan-card').forEach((c) => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedPlan = card.dataset.plan;
+    const plan = PLANS[selectedPlan];
+    if (btnBuy) {
+      btnBuy.disabled = false;
+      btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
+    }
+  }
+
+  // ── Buy Flow (Flutterwave) ────────────────────────────────────
+  async function handleBuyClick() {
+    if (!selectedPlan) { showError('Please select a plan first.'); return; }
+    
+    setLoading(btnBuy, true, 'Preparing payment…');
+    hideError();
+    const plan = PLANS[selectedPlan];
+    const emailStr = buyEmail ? buyEmail.value.trim() : '';
+
+    if (!emailStr) { showError('Please enter your email address.'); return; }
+    
+    try {
+      // 1. Initialize payment on our backend
+      const res = await fetch('/api/pay/init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          planId:    selectedPlan,
+          email:     emailStr,
+          clientMac: portalConfig.clientMac,
+          apMac:     portalConfig.apMac,
+          radioId:   portalConfig.radioId,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error || 'Payment init failed.');
+
+      setLoading(btnBuy, false);
+      btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
+
+      // 2. Open Flutterwave Inline Modal
+      if (window.FlutterwaveCheckout) {
+        FlutterwaveCheckout({
+          public_key: data.publicKey,
+          tx_ref: data.reference,
+          amount: data.amount,
+          currency: "NGN",
+          payment_options: "card, banktransfer, ussd",
+          customer: {
+            email: emailStr,
+            name: "OlasTech Customer",
+          },
+          customizations: {
+            title: "OlasTech Link",
+            description: `Payment for ${data.name} Plan`,
+            logo: "https://raw.githubusercontent.com/paystack/paystack-logo/master/Paystack-Logo.png" // Placeholder logo
+          },
+          callback: async function (payment) {
+            // 3. Payment succeeded on Flutterwave's end, verify it on our backend
+            console.log("Flutterwave callback:", payment);
+            setLoading(btnBuy, true, 'Verifying payment…');
+            try {
+              const verifyRes = await fetch('/api/pay/callback', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  transaction_id: payment.transaction_id,
+                  tx_ref: payment.tx_ref
+                })
+              });
+              
+              const verifyData = await verifyRes.json();
+              if (!verifyRes.ok || !verifyData.success) {
+                throw new Error(verifyData.error || 'Failed to verify payment.');
+              }
+              
+              // Success! Auto-fill the code and log them in
+              accessCodeInput.value = verifyData.code;
+              connectBtn.disabled = false;
+              switchTab('code');
+              showSuccess(`✅ Payment confirmed! Your code: ${verifyData.code} — Click Connect to go online.`);
+              
+            } catch (err) {
+              setLoading(btnBuy, false);
+              showError(err.message);
+            }
+          },
+          onclose: function() {
+            // Modal closed by user
+            console.log("Flutterwave modal closed");
+          }
+        });
+      } else {
+        throw new Error('Flutterwave script failed to load.');
+      }
+      
+    } catch (err) {
+      setLoading(btnBuy, false);
+      if (selectedPlan) {
+        btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
+      }
+      showError(err.message || 'Could not start payment. Check your connection.');
+    }
+  }
+
+  // ── On Connected ──────────────────────────────────────────────
+  function onConnected(data) {
+    sessionPlan.textContent     = data.plan     || '—';
+    
+    // Calculate Remaining Time
+    if (data.sessionExpires) {
+      const expires = new Date(data.sessionExpires);
+      const diffMs = expires - new Date();
+      if (diffMs > 0) {
+        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+        const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        sessionDuration.textContent = (diffDays > 0 ? diffDays + 'd ' : '') + diffHours + 'h';
+      } else {
+        sessionDuration.textContent = 'Expired';
+      }
+    } else {
+      sessionDuration.textContent = data.duration_h ? `${data.duration_h}h` : '—';
+    }
+
+    // Display Remaining Data
+    if (data.remaining_mb !== null && data.remaining_mb !== undefined) {
+      sessionData.textContent = `${(data.remaining_mb / 1024).toFixed(2)} GB`;
+    } else if (data.data_mb) {
+      sessionData.textContent = `${(data.data_mb / 1024).toFixed(2)} GB`;
+    } else {
+      sessionData.textContent = data.data_mb === null ? 'Unlimited' : '—';
+    }
+
+    successOverlay.classList.add('visible');
+
+    const redirect = data.redirectUrl || portalConfig.redirectUrl || 'https://www.google.com';
+    setTimeout(() => { window.location.href = redirect; }, 3500);
+  }
+
+  // ── UI Helpers ────────────────────────────────────────────────
+  function showError(msg) {
+    errorText.textContent = msg;
+    errorMessage.classList.add('visible');
+    errorMessage.style.animation = 'none';
+    void errorMessage.offsetHeight;
+    errorMessage.style.animation = '';
+  }
+  function hideError()   { errorMessage.classList.remove('visible'); }
+  function showSuccess(msg) { successText.textContent = msg; successMessage.classList.add('visible'); }
+  function hideSuccess() { successMessage.classList.remove('visible'); }
+
+  function setLoading(btn, loading, label) {
+    if (loading) {
+      btn.classList.add('loading');
+      btn.disabled = true;
+    } else {
+      btn.classList.remove('loading');
+      if (label) btn.textContent = label;
+    }
+  }
+
+  // ── Boot ──────────────────────────────────────────────────────
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
