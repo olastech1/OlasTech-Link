@@ -6,14 +6,23 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: {
-    rejectUnauthorized: false
-  }
-});
+let pool;
+
+if (process.env.DATABASE_URL) {
+  pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+}
+
+let isInitialized = false;
 
 async function initDb() {
+  if (!pool) throw new Error('DATABASE_URL is not configured.');
+  if (isInitialized) return;
+  
   const client = await pool.connect();
   try {
     await client.query(`
@@ -63,6 +72,7 @@ async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_codes_status ON access_codes(status);
       CREATE INDEX IF NOT EXISTS idx_pay_ref      ON payments(reference);
     `);
+    isInitialized = true;
   } catch (error) {
     console.error('Database initialization failed:', error);
   } finally {
@@ -70,11 +80,12 @@ async function initDb() {
   }
 }
 
-// Automatically init the db tables on import
-initDb();
-
 module.exports = {
-  query: (text, params) => pool.query(text, params),
+  query: async (text, params) => {
+    if (!pool) throw new Error('DATABASE_URL is not set in Environment Variables');
+    await initDb();
+    return pool.query(text, params);
+  },
   pool
 };
 
