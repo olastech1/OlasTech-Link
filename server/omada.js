@@ -86,8 +86,12 @@ async function authorizeClient({ clientMac, apMac, radioId, duration, limitDown,
     ...(limitUp   && { limitUp }),
   };
 
+  // Omada v5 requires the 'site' parameter in the body, not the URL
+  payload.site = SITE_NAME;
+  payload.ssidName = payload.ssidName || 'OlasTech Hotspot';
+
   const res = await omadaHttp.post(
-    `/${omadaControllerId}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/cmd/hotspot/auth`,
+    `/${omadaControllerId}/api/v2/hotspot/extPortal/auth`,
     payload,
     { headers: { Cookie: sessionCookie, 'Csrf-Token': omadaCsrfToken } }
   );
