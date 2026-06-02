@@ -75,6 +75,7 @@ async function initDb() {
 
       -- Migrations
       ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_activity_bytes BIGINT DEFAULT 0;
+      ALTER TABLE sessions ALTER COLUMN data_used TYPE NUMERIC;
     `);
     isInitialized = true;
   } catch (error) {
