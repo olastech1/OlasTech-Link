@@ -4,9 +4,9 @@ const { PLANS } = require('../../server/codes');
 
 module.exports = async function (req, res) {
   // Only allow GET or POST.
-  // Protect endpoint with ADMIN_KEY
+  // Protect endpoint with ADMIN_KEY or a specific cron token
   const key = req.headers['x-admin-key'] || req.query.key;
-  if (key !== process.env.ADMIN_KEY) {
+  if (key !== process.env.ADMIN_KEY && key !== 'sync_olastech_2026') {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
