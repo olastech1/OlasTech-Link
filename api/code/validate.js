@@ -16,7 +16,12 @@ module.exports = async function (req, res) {
 
     // Grant access via Omada controller
     let omadaGranted = false;
-    if (clientMac && apMac && process.env.OMADA_CONTROLLER_URL) {
+    
+    if (!clientMac || !apMac) {
+      throw new Error("Omada Configuration Error: Missing MAC addresses. You must enable 'Redirect URL Parameters' in your Omada Portal Settings!");
+    }
+
+    if (process.env.OMADA_CONTROLLER_URL) {
       try {
         await omada.grantAccess({
           clientMac,
@@ -27,8 +32,7 @@ module.exports = async function (req, res) {
         omadaGranted = true;
         console.log(`[auth] Granted ${result.plan} access to ${clientMac}`);
       } catch (omadaErr) {
-        // Log but don't fail the user — they can still see the success screen
-        console.error('[omada]', omadaErr.message);
+        throw new Error("Omada Error: " + omadaErr.message);
       }
     }
 
