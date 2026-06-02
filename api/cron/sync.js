@@ -15,6 +15,7 @@ module.exports = async function (req, res) {
     const activeSessionsRes = await db.query(`
       SELECT * FROM sessions 
       WHERE expires_at > CURRENT_TIMESTAMP
+      ORDER BY created_at DESC
     `);
     
     const activeSessions = activeSessionsRes.rows;
@@ -37,19 +38,28 @@ module.exports = async function (req, res) {
       if (c.mac) omadaClients[formatMac(c.mac)] = c;
     }
 
-    // 3. Process each session
+    // 3. Identify the most recent active session for each MAC
+    const latestSessionsByMac = {};
+    for (const session of activeSessions) {
+      const mac = formatMac(session.client_mac);
+      if (!latestSessionsByMac[mac]) {
+        latestSessionsByMac[mac] = session;
+      }
+    }
+
+    // 4. Process each unique session
     let updated = 0;
     let disconnected = 0;
 
-    for (const session of activeSessions) {
-      const mac = formatMac(session.client_mac);
+    for (const mac in latestSessionsByMac) {
+      const session = latestSessionsByMac[mac];
       const omadaClient = omadaClients[mac];
       
       if (!omadaClient) continue; // Client is not currently connected to WiFi
 
       // Calculate bytes used
-      const currentActivity = parseInt((omadaClient.download || 0) + (omadaClient.upload || 0), 10);
-      const lastActivity = parseInt(session.last_activity_bytes || 0, 10);
+      const currentActivity = (omadaClient.download || 0) + (omadaClient.upload || 0);
+      const lastActivity = parseFloat(session.last_activity_bytes || 0);
 
       let deltaBytes = 0;
       if (currentActivity >= lastActivity) {
@@ -62,15 +72,7 @@ module.exports = async function (req, res) {
       if (deltaBytes === 0) continue;
 
       const deltaMb = deltaBytes / (1024 * 1024);
-      
-      // We will only update if it's at least 1MB to save frequent tiny updates, 
-      // but for accuracy we can update DB with bytes if we had a bytes column. 
-      // Since data_used is INTEGER (MB), we'll add deltaMb. 
-      // Wait, if we add deltaMb, and we update last_activity_bytes, any fraction of an MB is lost!
-      // To fix this without schema changes, we can just track exact MBs. 
-      // But it's fine if they get a few extra KB. Let's just track it roughly.
-      
-      const newUsedMb = session.data_used + deltaMb;
+      const newUsedMb = parseFloat(session.data_used) + deltaMb;
       
       // Update DB
       await db.query(`
@@ -81,7 +83,7 @@ module.exports = async function (req, res) {
       
       updated++;
 
-      // 4. Check Limits
+      // 5. Check Limits
       const plan = PLANS[session.plan_id];
       if (plan && plan.data_mb && newUsedMb >= plan.data_mb) {
         // Unauthorize from Omada using the original MAC string it expects
