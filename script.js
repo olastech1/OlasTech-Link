@@ -290,7 +290,12 @@
     const plan = PLANS[selectedPlan];
     const emailStr = buyEmail ? buyEmail.value.trim() : '';
 
-    if (!emailStr) { showError('Please enter your email address.'); return; }
+    if (!emailStr) { 
+      setLoading(btnBuy, false);
+      btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
+      showError('Please enter your email address.'); 
+      return; 
+    }
     
     try {
       // 1. Initialize payment on our backend
@@ -309,6 +314,10 @@
       const data = await res.json();
       if (!res.ok || !data.success) throw new Error(data.error || 'Payment init failed.');
 
+      // Save reference so we can recover if modal closes without callback
+      localStorage.setItem('pending_tx_ref', data.reference);
+      localStorage.setItem('pending_tx_id', '');
+
       setLoading(btnBuy, false);
       btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
 
@@ -319,7 +328,7 @@
           tx_ref: data.reference,
           amount: data.amount,
           currency: "NGN",
-          payment_options: "card, banktransfer, ussd",
+          payment_options: "card,ussd",
           customer: {
             email: emailStr,
             name: "OlasTech Customer",
@@ -327,55 +336,96 @@
           customizations: {
             title: "OlasTech Link",
             description: `Payment for ${data.name} Plan`,
-            logo: "https://raw.githubusercontent.com/paystack/paystack-logo/master/Paystack-Logo.png" // Placeholder logo
           },
           callback: async function (payment) {
-            // 3. Payment succeeded on Flutterwave's end, verify it on our backend
+            // 3. Payment succeeded — verify on our backend
             console.log("Flutterwave callback:", payment);
+            localStorage.setItem('pending_tx_id', payment.transaction_id || '');
             setLoading(btnBuy, true, 'Verifying payment…');
-            try {
-              const verifyRes = await fetch('/api/pay/callback', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  transaction_id: payment.transaction_id,
-                  tx_ref: payment.tx_ref
-                })
-              });
-              
-              const verifyData = await verifyRes.json();
-              if (!verifyRes.ok || !verifyData.success) {
-                throw new Error(verifyData.error || 'Failed to verify payment.');
-              }
-              
-              // Success! Auto-fill the code and log them in
-              accessCodeInput.value = verifyData.code;
-              connectBtn.disabled = false;
-              switchTab('code');
-              showSuccess(`✅ Payment confirmed! Your code: ${verifyData.code} — Click Connect to go online.`);
-              
-            } catch (err) {
-              setLoading(btnBuy, false);
-              showError(err.message);
-            }
+            await verifyAndComplete(payment.transaction_id, payment.tx_ref);
           },
           onclose: function() {
-            // Modal closed by user
-            console.log("Flutterwave modal closed");
+            // Modal closed — check if payment went through
+            const savedRef = localStorage.getItem('pending_tx_ref');
+            const savedId  = localStorage.getItem('pending_tx_id');
+            if (savedId) {
+              // Payment was made, callback fired, verification in progress
+              return;
+            }
+            if (savedRef) {
+              // Modal closed without payment callback — show recovery option
+              setLoading(btnBuy, false);
+              btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
+              showError(
+                '⚠️ If you completed payment, click <strong style="cursor:pointer;text-decoration:underline" onclick="recoverPayment(\'' + savedRef + '\')">' +
+                'Recover My Code</strong> to get your access code.'
+              );
+            }
           }
         });
       } else {
-        throw new Error('Flutterwave script failed to load.');
+        throw new Error('Payment system failed to load. Please refresh the page.');
       }
       
     } catch (err) {
       setLoading(btnBuy, false);
       if (selectedPlan) {
-        btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
+        const plan2 = PLANS[selectedPlan];
+        btnBuy.textContent = `Pay ₦${plan2.price.toLocaleString()} for Access`;
       }
       showError(err.message || 'Could not start payment. Check your connection.');
     }
   }
+
+  async function verifyAndComplete(transactionId, txRef) {
+    try {
+      const verifyRes = await fetch('/api/pay/callback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ transaction_id: transactionId, tx_ref: txRef })
+      });
+      const verifyData = await verifyRes.json();
+      if (!verifyRes.ok || !verifyData.success) {
+        throw new Error(verifyData.error || 'Payment verification failed.');
+      }
+      // Clear pending
+      localStorage.removeItem('pending_tx_ref');
+      localStorage.removeItem('pending_tx_id');
+      // Success — fill code and connect
+      accessCodeInput.value = verifyData.code;
+      connectBtn.disabled = false;
+      setLoading(btnBuy, false);
+      switchTab('code');
+      showSuccess(`✅ Payment confirmed! Your code: <strong>${verifyData.code}</strong> — click Connect below.`);
+    } catch (err) {
+      setLoading(btnBuy, false);
+      showError('❌ ' + err.message + ' — Email hi@olaniyi.me if you were charged.');
+    }
+  }
+
+  // Global: called from recover link in error message
+  window.recoverPayment = async function(txRef) {
+    setLoading(btnBuy, true, 'Recovering code…');
+    hideError();
+    try {
+      const res = await fetch('/api/pay/recover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tx_ref: txRef })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) throw new Error(data.error);
+      localStorage.removeItem('pending_tx_ref');
+      accessCodeInput.value = data.code;
+      connectBtn.disabled = false;
+      setLoading(btnBuy, false);
+      switchTab('code');
+      showSuccess(`✅ Code recovered: <strong>${data.code}</strong> — click Connect below.`);
+    } catch(err) {
+      setLoading(btnBuy, false);
+      showError('Could not recover: ' + err.message + '. Email hi@olaniyi.me for help.');
+    }
+  };
 
   // ── On Connected ──────────────────────────────────────────────
   function onConnected(data) {
