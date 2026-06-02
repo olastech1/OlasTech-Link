@@ -28,7 +28,7 @@ module.exports = async function (req, res) {
           apMac,
           ssidName,
           radioId: radioId || '0',
-          planId: result.planId,
+          duration_h: result.duration_h,
         });
         omadaGranted = true;
         console.log(`[auth] Granted ${result.plan} access to ${clientMac}`);

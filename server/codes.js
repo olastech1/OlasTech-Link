@@ -1,21 +1,11 @@
 /**
  * codes.js — Access Code Generator & Validator
- * Generates unique codes like: S3F7K-X9QM
+ * Generates unique codes like: S3F7-X9QM
  */
 
 const db = require('./db');
 const crypto = require('crypto');
-
-// ── Plan definitions ─────────────────────────────────────────────
-const PLANS = {
-  '300gb':   { name: '300GB',           price: 35000, duration_h: 87600, data_mb: 307200, devices: 10, prefix: 'X' },
-  '250gb':   { name: '250GB',           price: 20000, duration_h: 87600, data_mb: 256000, devices: 5,  prefix: 'V' },
-  '150gb':   { name: '150GB',           price: 15000, duration_h: 87600, data_mb: 153600, devices: 4,  prefix: 'L' },
-  '110gb':   { name: '110GB',           price: 12000, duration_h: 87600, data_mb: 112640, devices: 4,  prefix: 'M' },
-  '50gb':    { name: '50GB',            price: 5000,  duration_h: 87600, data_mb: 51200,  devices: 4,  prefix: 'S' },
-  'weekend': { name: 'Weekend Unltd',   price: 10000, duration_h: 48,  data_mb: null,   devices: 5,  prefix: 'W' },
-  'daily':   { name: 'Daily Unltd',     price: 3000,  duration_h: 24,  data_mb: null,   devices: 3,  prefix: 'D' },
-};
+const omada = require('./omada');
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 0, 1 (ambiguous)
 
@@ -25,22 +15,26 @@ async function codeExists(code) {
 }
 
 /**
- * Generate a unique access code for a given plan.
- * Format: {PREFIX}{4chars}-{4chars}  e.g. S3F7K-X9QM
+ * Generate a unique access code for a given plan via Native Omada Voucher API.
  */
 async function generateCode(planId, paymentRef, email = null) {
-  const plan = PLANS[planId];
+  const res = await db.query('SELECT * FROM plans WHERE id = $1', [planId]);
+  const plan = res.rows[0];
   if (!plan) throw new Error(`Unknown plan: ${planId}`);
 
-  let code;
-  let attempts = 0;
-
-  do {
-    if (attempts++ > 50) throw new Error('Failed to generate unique code');
-    const part1 = randomChars(4);
-    const part2 = randomChars(4);
-    code = `${plan.prefix}${part1}-${part2}`;
-  } while (await codeExists(code));
+  let codes;
+  try {
+    codes = await omada.createVouchers({ 
+      count: 1, 
+      duration_h: plan.duration_h, 
+      data_mb: plan.data_mb, 
+      devices: plan.devices 
+    });
+  } catch (err) {
+    throw new Error('Failed to create Omada Voucher: ' + err.message);
+  }
+  
+  const code = codes[0];
 
   // Data plans never expire by time until data is used. Time-based plans expire based on duration.
   let expiresAt = null;
@@ -80,7 +74,8 @@ async function redeemCode(code, clientMac) {
     throw new Error('This access code has expired.');
   }
 
-  const plan = PLANS[row.plan_id];
+  const planRes = await db.query('SELECT * FROM plans WHERE id = $1', [row.plan_id]);
+  const plan = planRes.rows[0];
   if (!plan) throw new Error('Plan not found.');
   
   // Check how many unique devices have already used this code
@@ -159,14 +154,37 @@ async function redeemCode(code, clientMac) {
 }
 
 /**
- * Create a batch of pre-generated codes (for voucher printing).
+ * Create a batch of codes (for voucher printing) via Omada API.
  */
 async function generateBatch(planId, count = 10) {
-  const codes = [];
-  for (let i = 0; i < count; i++) {
-    const c = await generateCode(planId, null);
-    codes.push(c);
+  const res = await db.query('SELECT * FROM plans WHERE id = $1', [planId]);
+  const plan = res.rows[0];
+  if (!plan) throw new Error(`Unknown plan: ${planId}`);
+
+  let codes;
+  try {
+    codes = await omada.createVouchers({ 
+      count: count, 
+      duration_h: plan.duration_h, 
+      data_mb: plan.data_mb, 
+      devices: plan.devices 
+    });
+  } catch (err) {
+    throw new Error('Failed to create Omada Vouchers: ' + err.message);
   }
+
+  let expiresAt = null;
+  if (!plan.data_mb) {
+    expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  }
+
+  for (const code of codes) {
+    await db.query(`
+      INSERT INTO access_codes (code, plan_id, duration_h, data_mb, payment_ref, expires_at, email)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [code, planId, plan.duration_h, plan.data_mb, null, expiresAt, null]);
+  }
+
   return codes;
 }
 
@@ -178,4 +196,4 @@ function randomChars(n) {
     .join('');
 }
 
-module.exports = { PLANS, generateCode, redeemCode, generateBatch };
+module.exports = { generateCode, redeemCode, generateBatch };

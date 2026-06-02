@@ -1,6 +1,5 @@
 const db = require('../../server/db');
 const { getClientStats, unauthorizeClient } = require('../../server/omada');
-const { PLANS } = require('../../server/codes');
 
 module.exports = async function (req, res) {
   // Only allow GET or POST.
@@ -11,6 +10,11 @@ module.exports = async function (req, res) {
   }
 
   try {
+    // Load all dynamic plans
+    const plansRes = await db.query('SELECT * FROM plans');
+    const plansMap = {};
+    for (const p of plansRes.rows) plansMap[p.id] = p;
+
     // 1. Get all active sessions
     const activeSessionsRes = await db.query(`
       SELECT * FROM sessions 
@@ -84,7 +88,7 @@ module.exports = async function (req, res) {
       updated++;
 
       // 5. Check Limits
-      const plan = PLANS[session.plan_id];
+      const plan = plansMap[session.plan_id];
       if (plan && plan.data_mb && newUsedMb >= plan.data_mb) {
         // Unauthorize from Omada using the original MAC string it expects
         await unauthorizeClient(omadaClient.mac);

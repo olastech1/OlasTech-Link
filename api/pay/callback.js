@@ -1,6 +1,6 @@
 const db = require('../../server/db');
 const flutterwave = require('../../server/flutterwave');
-const { PLANS, generateCode } = require('../../server/codes');
+const { generateCode } = require('../../server/codes');
 const mailer = require('../../server/mailer');
 
 module.exports = async function (req, res) {
@@ -36,7 +36,9 @@ module.exports = async function (req, res) {
     // Generate the access code
     const code = await generateCode(payment.plan_id, tx_ref, payment.email);
     
-    const plan = PLANS[payment.plan_id];
+    const planRes = await db.query('SELECT * FROM plans WHERE id = $1', [payment.plan_id]);
+    const plan = planRes.rows[0] || { name: 'Access Plan' };
+
     if (payment.email) {
       mailer.sendSuccessEmail(payment.email, code, plan.name, payment.amount);
     }

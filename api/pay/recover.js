@@ -1,5 +1,5 @@
 const db = require('../../server/db');
-const { PLANS, generateCode } = require('../../server/codes');
+const { generateCode } = require('../../server/codes');
 const mailer = require('../../server/mailer');
 
 /**
@@ -45,7 +45,10 @@ module.exports = async function (req, res) {
 
     // Generate a new code for this payment
     const code = await generateCode(payment.plan_id, tx_ref, payment.email);
-    const plan = PLANS[payment.plan_id];
+    
+    const planRes = await db.query('SELECT name FROM plans WHERE id = $1', [payment.plan_id]);
+    const plan = planRes.rows[0];
+    
     if (payment.email) {
       mailer.sendSuccessEmail(payment.email, code, plan?.name, payment.amount);
     }

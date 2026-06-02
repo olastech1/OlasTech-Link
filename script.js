@@ -8,16 +8,8 @@
 (function () {
   'use strict';
 
-  // ── Plan Data (mirrors server) ────────────────────────────────
-  const PLANS = {
-    '300gb':   { name: '300GB',           price: 35000, duration: '30 Days',  data: '300 GB',    devices: 10 },
-    '250gb':   { name: '250GB',           price: 20000, duration: '30 Days',  data: '250 GB',    devices: 5 },
-    '150gb':   { name: '150GB',           price: 15000, duration: '30 Days',  data: '150 GB',    devices: 4 },
-    '110gb':   { name: '110GB',           price: 12000, duration: '30 Days',  data: '110 GB',    devices: 4 },
-    '50gb':    { name: '50GB',            price: 5000,  duration: '30 Days',  data: '50 GB',     devices: 4 },
-    'weekend': { name: 'Weekend Unltd',   price: 10000, duration: '48 Hours', data: 'Unlimited', devices: 5 },
-    'daily':   { name: 'Daily Unltd',     price: 3000,  duration: '24 Hours', data: 'Unlimited', devices: 3 },
-  };
+  // ── Plan Data (loaded from server) ────────────────────────────
+  let PLANS = {};
 
   // ── DOM References ────────────────────────────────────────────
   const tabCode         = document.getElementById('tabCode');
@@ -156,8 +148,22 @@
   };
 
   // ── Initialize ────────────────────────────────────────────────
-  function init() {
+  async function init() {
     if (portalConfig.ssidName) ssidDisplay.textContent = portalConfig.ssidName;
+
+    // Fetch dynamic plans
+    try {
+      const res = await fetch('/api/plans');
+      const data = await res.json();
+      if (data.success && data.plans) {
+        data.plans.forEach(p => PLANS[p.id] = p);
+        renderPlans(data.plans);
+      } else {
+        plansGrid.innerHTML = '<div style="color:var(--red);text-align:center;width:100%;padding:20px">Failed to load plans.</div>';
+      }
+    } catch (e) {
+      plansGrid.innerHTML = '<div style="color:var(--red);text-align:center;width:100%;padding:20px">Failed to connect to server.</div>';
+    }
 
     // Auto-fill code if coming back from Paystack callback
     const codeParam = params.get('code');
@@ -179,6 +185,57 @@
     bindEvents();
   }
 
+  function renderPlans(plansList) {
+    if (!plansGrid) return;
+    plansGrid.innerHTML = '';
+    
+    plansList.forEach(plan => {
+      const isBest = plan.is_best_value;
+      const isPop = plan.is_popular;
+      
+      let topHtml = `<span class="plan-name">${plan.name}</span>`;
+      if (isBest) {
+        topHtml += `<span class="plan-badge best-value">Best Value</span>`;
+      } else if (isPop) {
+        topHtml += `<span class="plan-badge popular">Popular</span>`;
+      }
+
+      const dataText = plan.data_mb ? `${Math.floor(plan.data_mb / 1024)} GB` : 'Unlimited Data';
+      const timeText = plan.data_mb ? '' : `<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> ${plan.duration_h} Hr</span>`;
+
+      const card = document.createElement('div');
+      card.className = 'plan-card';
+      card.setAttribute('data-plan', plan.id);
+      card.setAttribute('tabindex', '0');
+      card.innerHTML = `
+        <div class="plan-top">
+          ${topHtml}
+        </div>
+        <div class="plan-details">
+          <span class="plan-price"><span class="currency">₦</span>${parseInt(plan.price).toLocaleString()}</span>
+          <div class="plan-meta">
+            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg> ${plan.devices} Device${plan.devices > 1 ? 's' : ''}</span>
+            ${timeText}
+            ${plan.data_mb ? `<span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M2 12h20"/></svg> ${dataText}</span>` : ''}
+          </div>
+        </div>
+      `;
+      plansGrid.appendChild(card);
+    });
+
+    // Bind events for the newly created cards
+    const newCards = plansGrid.querySelectorAll('.plan-card');
+    newCards.forEach(card => {
+      card.addEventListener('click', handlePlanClick);
+      card.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          handlePlanClick(e);
+        }
+      });
+    });
+  }
+
   const errorMessages = {
     payment_failed:    'Payment was not completed. Please try again.',
     payment_not_found: 'Payment reference not found. Contact support.',
@@ -195,11 +252,7 @@
     accessCodeInput.addEventListener('input', onCodeInput);
     codeForm.addEventListener('submit', handleCodeSubmit);
 
-    plansGrid.addEventListener('click', handlePlanClick);
-    plansGrid.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handlePlanClick(e); }
-    });
-
+    // Plans grid click bindings are now handled inside renderPlans()
     if (btnBuy) btnBuy.addEventListener('click', handleBuyClick);
   }
 

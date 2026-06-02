@@ -132,20 +132,11 @@ async function authorizeClient({ clientMac, apMac, ssidName, radioId, duration }
 }
 
 /**
- * Convenience wrapper — authorizes with duration limits per plan.
+ * Convenience wrapper — authorizes with dynamic duration per plan.
  */
-async function grantAccess({ clientMac, apMac, ssidName, radioId, planId }) {
-  const limits = {
-    '300gb':   { duration: 87600 * 60 },
-    '250gb':   { duration: 87600 * 60 },
-    '150gb':   { duration: 87600 * 60 },
-    '110gb':   { duration: 87600 * 60 },
-    '50gb':    { duration: 87600 * 60 },
-    'weekend': { duration: 48 * 60 },
-    'daily':   { duration: 24 * 60 },
-  };
-
-  const { duration } = limits[planId] || limits['daily'];
+async function grantAccess({ clientMac, apMac, ssidName, radioId, duration_h }) {
+  // If duration_h is null/undefined (unlimited), authorize for ~10 years
+  const duration = duration_h ? duration_h * 60 : 5256000;
 
   await authorizeClient({ clientMac, apMac, ssidName, radioId, duration });
 
@@ -208,4 +199,62 @@ async function unauthorizeClient(clientMac) {
   return typeof res.data === 'object' && res.data.errorCode === 0;
 }
 
-module.exports = { authorizeClient, grantAccess, getClientStats, unauthorizeClient };
+/**
+ * Create Native Omada Vouchers
+ * Bypasses the custom external portal and tracks auth natively in Omada.
+ */
+async function createVouchers({ count = 1, duration_h, data_mb, devices = 1 }) {
+  const { cid, cookie, token } = await _adminLogin();
+
+  // 1. Get Site ID
+  const sitesRes = await http.get(`/${cid}/api/v2/users/current`, {
+    headers: { Cookie: cookie, 'Csrf-Token': token }
+  });
+  if (!sitesRes.data || sitesRes.data.errorCode !== 0) throw new Error('Failed to fetch sites for voucher generation.');
+  const site = (sitesRes.data.result.privilege.sites || []).find(s => s.name === SITE_NAME);
+  if (!site) throw new Error(`Site ${SITE_NAME} not found`);
+  const siteId = site.key || site.id;
+
+  // 2. Prepare payload
+  const durationInMinutes = duration_h ? duration_h * 60 : 5256000; // ~10 years if unlimited
+  
+  const payload = {
+    amount: count,
+    codeLength: 8,
+    duration: durationInMinutes,
+    upLimitEnable: false,
+    downLimitEnable: false,
+    trafficLimitEnable: !!data_mb,
+  };
+
+  if (data_mb) {
+    payload.trafficLimit = data_mb;
+  }
+
+  // Multi-use vs Single-use
+  // Most v5 APIs use 'type: 1' for Multi-User and 'type: 0' for single user. 
+  if (devices > 1) {
+    payload.type = 1;
+    payload.userLimit = devices; 
+  } else {
+    payload.type = 0; 
+  }
+
+  // 3. POST to create vouchers
+  const res = await http.post(
+    `/${cid}/api/v2/hotspot/sites/${siteId}/vouchers`,
+    payload,
+    { headers: { Cookie: cookie, 'Csrf-Token': token } }
+  );
+
+  if (res.data.errorCode !== 0) {
+    throw new Error(`Omada failed to create voucher: ${res.data.msg}`);
+  }
+
+  // 4. Retrieve the newly created voucher codes
+  // Omada returns the created vouchers usually in the result.data array
+  const created = res.data.result.data || [];
+  return created.map(v => v.code || v.voucherCode);
+}
+
+module.exports = { authorizeClient, grantAccess, getClientStats, unauthorizeClient, createVouchers };

@@ -1,20 +1,20 @@
 const crypto = require('crypto');
 const db = require('../../server/db');
-const { PLANS } = require('../../server/codes');
 
 module.exports = async function (req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { planId, email, clientMac, apMac, radioId } = req.body;
 
-  if (!PLANS[planId]) {
-    return res.status(400).json({ error: 'Invalid plan selected.' });
-  }
-
-  const plan = PLANS[planId];
-  const reference = `OTL-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
-
   try {
+    const planRes = await db.query('SELECT * FROM plans WHERE id = $1', [planId]);
+    const plan = planRes.rows[0];
+    if (!plan) {
+      return res.status(400).json({ error: 'Invalid plan selected.' });
+    }
+
+    const reference = `OTL-${Date.now()}-${crypto.randomBytes(4).toString('hex').toUpperCase()}`;
+
     // Store pending payment (postgres)
     await db.query(`
       INSERT INTO payments (reference, plan_id, amount, email, status, client_mac)
