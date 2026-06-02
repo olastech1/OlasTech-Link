@@ -105,10 +105,10 @@ async function initDb() {
       ];
 
       for (const p of defaultPlans) {
-        await client.query(\`
+        await client.query(`
           INSERT INTO plans (id, name, price, duration_h, data_mb, devices, is_popular, is_best_value)
           VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        \`, p);
+        `, p);
       }
     }
 
