@@ -125,7 +125,13 @@ async function getClientStats() {
     { headers: { Cookie: cookie, 'Csrf-Token': token }, params: { currentPageSize: 9999 } }
   );
 
-  if (typeof res.data !== 'object' || res.data.errorCode !== 0) return [];
+  if (typeof res.data !== 'object') {
+    throw new Error('Omada returned unexpected HTML for clients API');
+  }
+  
+  if (res.data.errorCode !== 0) {
+    throw new Error(`Omada clients API failed: ${res.data.msg} (code ${res.data.errorCode})`);
+  }
 
   return res.data.result.data || [];
 }
