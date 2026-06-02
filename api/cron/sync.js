@@ -4,8 +4,9 @@ const { PLANS } = require('../../server/codes');
 
 module.exports = async function (req, res) {
   // Only allow GET or POST.
-  // We can protect this endpoint with a secret header in Vercel Cron.
-  if (req.headers.authorization !== `Bearer ${process.env.CRON_SECRET}` && !process.env.IS_LOCAL) {
+  // Protect endpoint with ADMIN_KEY
+  const key = req.headers['x-admin-key'] || req.query.key;
+  if (key !== process.env.ADMIN_KEY) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
 
