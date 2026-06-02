@@ -249,6 +249,7 @@
           clientMac: portalConfig.clientMac,
           apMac:     portalConfig.apMac,
           radioId:   portalConfig.radioId,
+          ssidName:  portalConfig.ssidName,
         }),
       });
 

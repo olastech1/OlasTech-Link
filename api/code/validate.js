@@ -4,7 +4,7 @@ const omada = require('../../server/omada');
 module.exports = async function (req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { code, clientMac, apMac, radioId } = req.body;
+  const { code, clientMac, apMac, radioId, ssidName } = req.body;
 
   if (!code) {
     return res.status(400).json({ error: 'No code provided.' });
@@ -26,6 +26,7 @@ module.exports = async function (req, res) {
         await omada.grantAccess({
           clientMac,
           apMac,
+          ssidName,
           radioId: radioId || '0',
           planId: result.planId,
         });
