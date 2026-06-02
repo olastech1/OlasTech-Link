@@ -1,0 +1,6 @@
+#!/usr/bin/expect -f
+set timeout 15
+spawn bash -c "ssh -o StrictHostKeyChecking=no root@144.126.203.142 'ufw status && docker ps -a'"
+expect "assword:"
+send "0703841@\$Ola\r"
+expect eof

@@ -1,0 +1,29 @@
+#!/usr/bin/expect -f
+set timeout 15
+spawn ssh -o StrictHostKeyChecking=no root@144.126.203.142
+expect {
+    "assword:" {
+        send "0703841@\$Ola\r"
+        exp_continue
+    }
+    "(current) UNIX password:" {
+        send "0703841@\$Ola\r"
+        exp_continue
+    }
+    "New password:" {
+        send "OlasTech@2026!\r"
+        exp_continue
+    }
+    "Retype new password:" {
+        send "OlasTech@2026!\r"
+        exp_continue
+    }
+    "root@" {
+        send "ls -la\r"
+        expect "root@"
+        send "exit\r"
+    }
+    timeout {
+        puts "Timeout occurred"
+    }
+}

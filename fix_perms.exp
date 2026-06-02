@@ -1,0 +1,13 @@
+#!/usr/bin/expect -f
+set timeout 15
+spawn ssh -o StrictHostKeyChecking=no root@144.126.203.142 "chown -R 508:508 /opt/omada && docker restart omada-controller && docker logs omada-controller"
+expect {
+    "assword:" {
+        send "0703841@\$Ola\r"
+        exp_continue
+    }
+    timeout {
+        puts "Timeout occurred"
+    }
+    eof
+}

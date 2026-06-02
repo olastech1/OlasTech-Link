@@ -1,0 +1,11 @@
+#!/usr/bin/expect -f
+set timeout -1
+spawn scp -o StrictHostKeyChecking=no install_omada.sh root@144.126.203.142:/root/install_omada.sh
+expect "assword:"
+send "0703841@\$Ola\r"
+expect eof
+
+spawn ssh -o StrictHostKeyChecking=no root@144.126.203.142 "bash /root/install_omada.sh"
+expect "assword:"
+send "0703841@\$Ola\r"
+expect eof

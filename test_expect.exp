@@ -1,0 +1,21 @@
+#!/usr/bin/expect -f
+set timeout 15
+spawn ssh -o StrictHostKeyChecking=no root@144.126.203.142
+expect {
+    "assword:" {
+        send "0703841@\$Ola\r"
+        exp_continue
+    }
+    "root@ubuntu" {
+        send "docker ps -a > /tmp/docker.log\r"
+        expect "root@ubuntu"
+        send "docker logs omada-controller >> /tmp/docker.log\r"
+        expect "root@ubuntu"
+        send "cat /tmp/docker.log\r"
+        expect "root@ubuntu"
+        send "exit\r"
+    }
+    timeout {
+        puts "Timeout occurred"
+    }
+}
