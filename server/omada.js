@@ -58,6 +58,26 @@ async function _login() {
   return { cid, cookie, token };
 }
 
+async function _adminLogin() {
+  const infoRes = await http.get('/api/info');
+  const cid = infoRes.data.result.omadacId;
+
+  const loginRes = await http.post(`/api/v2/login`, {
+    username: USERNAME,
+    password: PASSWORD,
+  });
+
+  if (loginRes.data.errorCode !== 0) {
+    throw new Error(`Omada admin login failed: ${loginRes.data.msg}`);
+  }
+
+  const cookies = loginRes.headers['set-cookie'];
+  const cookie  = cookies ? cookies.map((c) => c.split(';')[0]).join('; ') : '';
+  const token   = loginRes.data.result.token;
+
+  return { cid, cookie, token };
+}
+
 /**
  * Authorize a client device for internet access.
  * Each call does a fresh login then immediately sends the auth command.
@@ -118,15 +138,32 @@ async function grantAccess({ clientMac, apMac, ssidName, radioId, planId }) {
  * Get active client stats for data tracking.
  */
 async function getClientStats() {
-  const { cid, cookie, token } = await _login();
+  const { cid, cookie, token } = await _adminLogin();
 
+  // 1. Get all sites to find the exact siteId for SITE_NAME
+  const sitesRes = await http.get(`/${cid}/api/v2/sites`, {
+    headers: { Cookie: cookie, 'Csrf-Token': token },
+    params: { currentPageSize: 100 }
+  });
+
+  if (typeof sitesRes.data !== 'object' || sitesRes.data.errorCode !== 0) {
+    throw new Error('Failed to fetch sites to find siteId');
+  }
+
+  const sites = sitesRes.data.result.data || [];
+  const site = sites.find(s => s.name === SITE_NAME);
+  if (!site) {
+    throw new Error(`Site ${SITE_NAME} not found in Omada`);
+  }
+
+  // 2. Fetch clients using the exact siteId
   const res = await http.get(
-    `/${cid}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/clients`,
+    `/${cid}/api/v2/sites/${site.id}/clients`,
     { headers: { Cookie: cookie, 'Csrf-Token': token }, params: { currentPageSize: 9999 } }
   );
 
   if (typeof res.data !== 'object') {
-    throw new Error('Omada returned unexpected HTML for clients API');
+    throw new Error('Omada returned unexpected HTML for clients API. Check permissions.');
   }
   
   if (res.data.errorCode !== 0) {
