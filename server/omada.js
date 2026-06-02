@@ -30,7 +30,6 @@ const omadaHttp = axios.create({
 
 let sessionCookie = null;
 let omadaControllerId = null;
-let omadaCsrfToken = null;
 
 /**
  * Login to Omada Controller. Returns controller ID (needed for all API calls).
@@ -41,17 +40,14 @@ async function login() {
   omadaControllerId = infoRes.data.result.omadacId;
 
   // Step 2: Login using standard admin endpoint
-  const loginRes = await omadaHttp.post(`/${omadaControllerId}/api/v2/login`, {
-    username: USERNAME,
+  const loginRes = await omadaHttp.post(`/${omadaControllerId}/api/v2/hotspot/login`, {
+    name: USERNAME, // Hotspot Operator uses 'name', not 'username'
     password: PASSWORD,
   });
 
   if (loginRes.data.errorCode !== 0) {
     throw new Error(`Omada login failed: ${loginRes.data.msg}`);
   }
-
-  // Extract CSRF Token
-  omadaCsrfToken = loginRes.data.result.token;
 
   // Store session cookie
   const cookies = loginRes.headers['set-cookie'];
@@ -93,7 +89,7 @@ async function authorizeClient({ clientMac, apMac, radioId, duration, limitDown,
   const res = await omadaHttp.post(
     `/${omadaControllerId}/api/v2/hotspot/extPortal/auth`,
     payload,
-    { headers: { Cookie: sessionCookie, 'Csrf-Token': omadaCsrfToken } }
+    { headers: { Cookie: sessionCookie } }
   );
 
   if (res.data.errorCode !== 0) {
@@ -144,7 +140,7 @@ async function getClientStats() {
 
   const res = await omadaHttp.get(
     `/${omadaControllerId}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/clients`,
-    { headers: { Cookie: sessionCookie, 'Csrf-Token': omadaCsrfToken }, params: { currentPageSize: 9999 } }
+    { headers: { Cookie: sessionCookie }, params: { currentPageSize: 9999 } }
   );
 
   if (res.data.errorCode !== 0) {
@@ -168,7 +164,7 @@ async function unauthorizeClient(clientMac) {
   const res = await omadaHttp.post(
     `/${omadaControllerId}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/cmd/hotspot/unauth`,
     { mac: clientMac },
-    { headers: { Cookie: sessionCookie, 'Csrf-Token': omadaCsrfToken } }
+    { headers: { Cookie: sessionCookie } }
   );
 
   return res.data.errorCode === 0;
