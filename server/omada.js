@@ -215,6 +215,12 @@ async function createVouchers({ count = 1, duration_h, data_mb, devices = 1 }) {
   if (!site) throw new Error(`Site ${SITE_NAME} not found`);
   const siteId = site.key || site.id;
 
+  // Fetch portal IDs (required by Omada v5)
+  const portalsRes = await http.get(`/${cid}/api/v2/sites/${siteId}/setting/portals`, {
+    headers: { Cookie: cookie, 'Csrf-Token': token }
+  });
+  const portalIds = (portalsRes.data.result || []).map(p => p.id);
+
   // 2. Prepare payload
   const durationInMinutes = duration_h ? duration_h * 60 : 5256000; // ~10 years if unlimited
   
@@ -222,9 +228,11 @@ async function createVouchers({ count = 1, duration_h, data_mb, devices = 1 }) {
     amount: count,
     codeLength: 8,
     duration: durationInMinutes,
+    durationType: 1,
     upLimitEnable: false,
     downLimitEnable: false,
     trafficLimitEnable: !!data_mb,
+    portals: portalIds
   };
 
   if (data_mb) {
@@ -234,10 +242,11 @@ async function createVouchers({ count = 1, duration_h, data_mb, devices = 1 }) {
   // Multi-use vs Single-use
   // Most v5 APIs use 'type: 1' for Multi-User and 'type: 0' for single user. 
   if (devices > 1) {
-    payload.type = 1;
-    payload.userLimit = devices; 
+    payload.type = 0; // Vouchers are generally type 0, maxUsers handles devices
+    payload.maxUsers = devices; 
   } else {
-    payload.type = 0; 
+    payload.type = 0;
+    payload.maxUsers = 1;
   }
 
   // 3. POST to create vouchers
