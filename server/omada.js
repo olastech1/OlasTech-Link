@@ -156,9 +156,9 @@ async function getClientStats() {
   }
   const siteId = site.key || site.id;
 
-  // 2. Fetch clients using the exact siteId
+  // 2. Fetch clients using the exact siteId (using insight/clients which is more stable)
   const res = await http.get(
-    `/${cid}/api/v2/sites/${siteId}/clients`,
+    `/${cid}/api/v2/sites/${siteId}/insight/clients`,
     { headers: { Cookie: cookie, 'Csrf-Token': token }, params: { currentPageSize: 9999, currentPage: 1 } }
   );
 
