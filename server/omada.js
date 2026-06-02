@@ -32,25 +32,43 @@ const http = axios.create({
 });
 
 /**
- * Login to Omada as a Hotspot Operator.
+ * Login to Omada.
+ * Tries Hotspot Operator login first. If it fails due to account type, 
+ * it falls back to Admin login.
  * Returns { cid, cookie, token } for use in subsequent calls.
  */
 async function _login() {
-  // 1. Get controller ID
   const infoRes = await http.get('/api/info');
   const cid = infoRes.data.result.omadacId;
 
-  // 2. Login as Hotspot Operator
-  const loginRes = await http.post(`/${cid}/api/v2/hotspot/login`, {
-    name: USERNAME,
-    password: PASSWORD,
-  });
-
-  if (loginRes.data.errorCode !== 0) {
-    throw new Error(`Omada login failed: ${loginRes.data.msg}`);
+  let loginRes;
+  try {
+    // 1. Try Hotspot Operator login
+    loginRes = await http.post(`/${cid}/api/v2/hotspot/login`, {
+      name: USERNAME,
+      password: PASSWORD,
+    });
+    
+    // If it fails, fallback to Admin login
+    if (loginRes.data.errorCode !== 0) {
+      loginRes = await http.post(`/${cid}/api/v2/login`, {
+        username: USERNAME,
+        password: PASSWORD,
+      });
+    }
+  } catch (err) {
+    // Fallback if the hotspot endpoint 404s or throws
+    loginRes = await http.post(`/${cid}/api/v2/login`, {
+      username: USERNAME,
+      password: PASSWORD,
+    });
   }
 
-  // 3. Extract cookie and CSRF token (both required for v5.0.15+)
+  if (loginRes.data.errorCode !== 0) {
+    throw new Error(`Omada login failed: ${loginRes.data.msg || 'Invalid username or password.'}`);
+  }
+
+  // Extract cookie and CSRF token (both required for v5.0.15+)
   const cookies = loginRes.headers['set-cookie'];
   const cookie  = cookies ? cookies.map((c) => c.split(';')[0]).join('; ') : '';
   const token   = loginRes.data.result.token;
