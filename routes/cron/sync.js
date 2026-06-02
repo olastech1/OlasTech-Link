@@ -73,24 +73,42 @@ module.exports = async function (req, res) {
         deltaBytes = currentActivity;
       }
 
-      if (deltaBytes === 0) continue;
+      // Calculate time used
+      const currentDuration = parseFloat(omadaClient.duration || 0);
+      const lastDuration = parseFloat(session.last_activity_time || 0);
+
+      let deltaSeconds = 0;
+      if (currentDuration >= lastDuration) {
+        deltaSeconds = currentDuration - lastDuration;
+      } else {
+        // Counter reset (new connection session started in Omada)
+        deltaSeconds = currentDuration;
+      }
+
+      if (deltaBytes === 0 && deltaSeconds === 0) continue;
 
       const deltaMb = deltaBytes / (1024 * 1024);
       const newUsedMb = parseFloat(session.data_used) + deltaMb;
+      const newUsedTime = parseFloat(session.time_used || 0) + deltaSeconds;
       
       // Update DB
       await db.query(`
         UPDATE sessions 
-        SET data_used = $1, last_activity_bytes = $2
-        WHERE id = $3
-      `, [newUsedMb, currentActivity, session.id]);
+        SET data_used = $1, last_activity_bytes = $2, time_used = $3, last_activity_time = $4
+        WHERE id = $5
+      `, [newUsedMb, currentActivity, newUsedTime, currentDuration, session.id]);
       
       updated++;
 
       // 5. Check Limits
       const plan = plansMap[session.plan_id];
-      if (plan && plan.data_mb && newUsedMb >= plan.data_mb) {
-        // Unauthorize from Omada using the original MAC string it expects
+      const maxSeconds = plan ? plan.duration_h * 3600 : 0;
+      
+      const exceededData = plan && plan.data_mb && newUsedMb >= plan.data_mb;
+      const exceededTime = maxSeconds > 0 && newUsedTime >= maxSeconds;
+
+      if (exceededData || exceededTime) {
+        // Unauthorize from Omada
         await unauthorizeClient(omadaClient.mac);
         
         // Mark session as expired

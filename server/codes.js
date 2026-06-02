@@ -81,6 +81,23 @@ async function redeemCode(code, clientMac) {
   
   const currentDevices = devicesResult.rows.length > 0 ? parseInt(devicesResult.rows[0].deviceCount, 10) : 0;
   
+  // Calculate remaining data AND time globally for this code
+  const allSessionsRes = await db.query(`SELECT data_used, time_used FROM sessions WHERE code = $1`, [normalised]);
+  let totalUsedMB = 0;
+  let totalUsedSeconds = 0;
+  
+  for (const session of allSessionsRes.rows) {
+    totalUsedMB += parseFloat(session.data_used || 0);
+    totalUsedSeconds += parseFloat(session.time_used || 0);
+  }
+  
+  let remaining_mb = row.data_mb ? Math.max(0, row.data_mb - totalUsedMB) : null;
+  const remaining_seconds = (row.duration_h * 3600) - totalUsedSeconds;
+
+  if (row.duration_h > 0 && remaining_seconds <= 0) {
+    throw new Error('Time limit reached. Your purchased time has been exhausted.');
+  }
+
   // Is this specific MAC already authorized on this code?
   const existingSessionResult = await db.query(`
     SELECT * FROM sessions WHERE code = $1 AND client_mac = $2 AND expires_at > CURRENT_TIMESTAMP
@@ -91,20 +108,18 @@ async function redeemCode(code, clientMac) {
     throw new Error(`Device limit reached. This code only supports up to ${plan.devices} devices.`);
   }
 
-  // If we already have a session, don't create a new one, just return it
   let sessionExpires;
-  let remaining_mb;
   if (existingSession) {
-    sessionExpires = existingSession.expires_at;
+    // Extend the existing session's expiration based on remaining seconds
+    sessionExpires = new Date(Date.now() + remaining_seconds * 1000).toISOString();
+    await db.query(`UPDATE sessions SET expires_at = $1 WHERE id = $2`, [sessionExpires, existingSession.id]);
   } else {
     // Create new session
-    sessionExpires = new Date(Date.now() + row.duration_h * 60 * 60 * 1000).toISOString();
+    sessionExpires = new Date(Date.now() + remaining_seconds * 1000).toISOString();
     
-    // Transaction
     const client = await db.pool.connect();
     try {
       await client.query('BEGIN');
-      // If this is the FIRST device, mark as used
       if (currentDevices === 0) {
         await client.query(`
           UPDATE access_codes
@@ -112,12 +127,10 @@ async function redeemCode(code, clientMac) {
           WHERE code = $2
         `, [clientMac, normalised]);
       }
-  
       await client.query(`
         INSERT INTO sessions (code, client_mac, plan_id, expires_at)
         VALUES ($1, $2, $3, $4)
       `, [normalised, clientMac, row.plan_id, sessionExpires]);
-      
       await client.query('COMMIT');
     } catch (e) {
       await client.query('ROLLBACK');
@@ -126,21 +139,12 @@ async function redeemCode(code, clientMac) {
       client.release();
     }
   }
-  
-  // Calculate remaining data globally for this code
-  const allSessionsRes = await db.query(`SELECT data_used FROM sessions WHERE code = $1`, [normalised]);
-  let totalUsedMB = 0;
-  for (const session of allSessionsRes.rows) {
-    totalUsedMB += session.data_used || 0;
-  }
-  
-  remaining_mb = row.data_mb ? Math.max(0, row.data_mb - totalUsedMB) : null;
 
   return {
     valid: true,
     plan: plan.name,
     planId: row.plan_id,
-    duration_h: row.duration_h,
+    duration_h: row.duration_h > 0 ? (remaining_seconds / 3600) : null,
     data_mb: row.data_mb,
     remaining_mb: remaining_mb,
     sessionExpires,

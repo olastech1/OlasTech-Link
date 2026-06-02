@@ -61,8 +61,10 @@ async function initDb() {
         code            VARCHAR(255) NOT NULL REFERENCES access_codes(code),
         client_mac      VARCHAR(255) NOT NULL,
         plan_id         VARCHAR(255) NOT NULL,
-        data_used       INTEGER DEFAULT 0,
+        data_used       NUMERIC DEFAULT 0,
         last_activity_bytes BIGINT DEFAULT 0,
+        time_used       BIGINT DEFAULT 0,
+        last_activity_time BIGINT DEFAULT 0,
         notified_200mb  INTEGER DEFAULT 0,
         started_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         expires_at      TIMESTAMP NOT NULL
