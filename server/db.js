@@ -93,26 +93,35 @@ async function initDb() {
       ALTER TABLE sessions ALTER COLUMN data_used TYPE NUMERIC;
     `);
 
-    // Seed initial plans if the table is empty
-    const { rows } = await client.query('SELECT COUNT(*) FROM plans');
-    if (parseInt(rows[0].count) === 0) {
-      const defaultPlans = [
-        ['300gb',   '300GB Plan',        35000, 720, 307200, 10, false, true],
-        ['250gb',   '250GB Plan',        20000, 720, 256000,  5, false, false],
-        ['150gb',   '150GB Plan',        15000, 720, 153600,  4, false, false],
-        ['110gb',   '110GB Plan',        12000, 720, 112640,  4, true,  false],
-        ['50gb',    '50GB Plan',          5000, 720,  51200,  4, false, false],
-        ['weekend', 'Weekend Unlimited', 10000,  48,   null,  5, false, false],
-        ['daily',   'Daily Unlimited',    3000,  24,   null,  3, false, false],
-      ];
+    // Sync dynamic plans
+    const newPlans = [
+      ['300gb',   '300GB',             35000, 720, 307200, 10, false, true],
+      ['250gb',   '250GB',             20000, 720, 256000,  5, false, false],
+      ['150gb',   '150GB',             15000, 720, 153600,  4, false, false],
+      ['110gb',   '110GB',             12000, 720, 112640,  4, true,  false],
+      ['50gb',    '50GB',               5000, 720,  51200,  4, false, false],
+      ['weekend', 'Weekend Unlimited', 10000,  48,   null,  5, false, false],
+      ['daily',   'Daily Unlimited',    3000,  24,   null,  3, false, false],
+    ];
 
-      for (const p of defaultPlans) {
-        await client.query(`
-          INSERT INTO plans (id, name, price, duration_h, data_mb, devices, is_popular, is_best_value)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        `, p);
-      }
+    const planIds = newPlans.map(p => p[0]);
+
+    for (const p of newPlans) {
+      await client.query(`
+        INSERT INTO plans (id, name, price, duration_h, data_mb, devices, is_popular, is_best_value)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          price = EXCLUDED.price,
+          duration_h = EXCLUDED.duration_h,
+          data_mb = EXCLUDED.data_mb,
+          devices = EXCLUDED.devices,
+          is_popular = EXCLUDED.is_popular,
+          is_best_value = EXCLUDED.is_best_value
+      `, p);
     }
+
+    await client.query(`DELETE FROM plans WHERE id NOT IN (${planIds.map(id => `'${id}'`).join(',')})`);
 
     isInitialized = true;
   } catch (error) {
