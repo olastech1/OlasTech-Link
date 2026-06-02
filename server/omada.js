@@ -30,6 +30,7 @@ const omadaHttp = axios.create({
 
 let sessionCookie = null;
 let omadaControllerId = null;
+let omadaCsrfToken = null;
 
 /**
  * Login to Omada Controller. Returns controller ID (needed for all API calls).
@@ -39,8 +40,8 @@ async function login() {
   const infoRes = await omadaHttp.get('/api/info');
   omadaControllerId = infoRes.data.result.omadacId;
 
-  // Step 2: Login
-  const loginRes = await omadaHttp.post(`/${omadaControllerId}/api/v2/hotspot/login`, {
+  // Step 2: Login using standard admin endpoint
+  const loginRes = await omadaHttp.post(`/${omadaControllerId}/api/v2/login`, {
     username: USERNAME,
     password: PASSWORD,
   });
@@ -48,6 +49,9 @@ async function login() {
   if (loginRes.data.errorCode !== 0) {
     throw new Error(`Omada login failed: ${loginRes.data.msg}`);
   }
+
+  // Extract CSRF Token
+  omadaCsrfToken = loginRes.data.result.token;
 
   // Store session cookie
   const cookies = loginRes.headers['set-cookie'];
@@ -85,7 +89,7 @@ async function authorizeClient({ clientMac, apMac, radioId, duration, limitDown,
   const res = await omadaHttp.post(
     `/${omadaControllerId}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/cmd/hotspot/auth`,
     payload,
-    { headers: { Cookie: sessionCookie } }
+    { headers: { Cookie: sessionCookie, 'Csrf-Token': omadaCsrfToken } }
   );
 
   if (res.data.errorCode !== 0) {
@@ -136,7 +140,7 @@ async function getClientStats() {
 
   const res = await omadaHttp.get(
     `/${omadaControllerId}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/clients`,
-    { headers: { Cookie: sessionCookie }, params: { currentPageSize: 9999 } }
+    { headers: { Cookie: sessionCookie, 'Csrf-Token': omadaCsrfToken }, params: { currentPageSize: 9999 } }
   );
 
   if (res.data.errorCode !== 0) {
@@ -160,7 +164,7 @@ async function unauthorizeClient(clientMac) {
   const res = await omadaHttp.post(
     `/${omadaControllerId}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/cmd/hotspot/unauth`,
     { mac: clientMac },
-    { headers: { Cookie: sessionCookie } }
+    { headers: { Cookie: sessionCookie, 'Csrf-Token': omadaCsrfToken } }
   );
 
   return res.data.errorCode === 0;
