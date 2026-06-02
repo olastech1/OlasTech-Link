@@ -141,24 +141,24 @@ async function getClientStats() {
   const { cid, cookie, token } = await _adminLogin();
 
   // 1. Get all sites to find the exact siteId for SITE_NAME
-  const sitesRes = await http.get(`/${cid}/api/v2/sites`, {
-    headers: { Cookie: cookie, 'Csrf-Token': token },
-    params: { currentPageSize: 100 }
+  const sitesRes = await http.get(`/${cid}/api/v2/users/current`, {
+    headers: { Cookie: cookie, 'Csrf-Token': token }
   });
 
   if (typeof sitesRes.data !== 'object' || sitesRes.data.errorCode !== 0) {
-    throw new Error('Failed to fetch sites to find siteId');
+    throw new Error(`Failed to fetch sites: ${JSON.stringify(sitesRes.data)}`);
   }
 
-  const sites = sitesRes.data.result.data || [];
+  const sites = sitesRes.data.result.privilege.sites || [];
   const site = sites.find(s => s.name === SITE_NAME);
   if (!site) {
     throw new Error(`Site ${SITE_NAME} not found in Omada`);
   }
+  const siteId = site.key || site.id;
 
   // 2. Fetch clients using the exact siteId
   const res = await http.get(
-    `/${cid}/api/v2/sites/${site.id}/clients`,
+    `/${cid}/api/v2/sites/${siteId}/clients`,
     { headers: { Cookie: cookie, 'Csrf-Token': token }, params: { currentPageSize: 9999 } }
   );
 
