@@ -30,6 +30,7 @@ const omadaHttp = axios.create({
 
 let sessionCookie = null;
 let omadaControllerId = null;
+let omadaCsrfToken = null;
 
 /**
  * Login to Omada Controller. Returns controller ID (needed for all API calls).
@@ -48,6 +49,9 @@ async function login() {
   if (loginRes.data.errorCode !== 0) {
     throw new Error(`Omada login failed: ${loginRes.data.msg}`);
   }
+
+  // Extract CSRF Token (Required in Omada 5.0.15+)
+  omadaCsrfToken = loginRes.data.result.token;
 
   // Store session cookie
   const cookies = loginRes.headers['set-cookie'];
@@ -89,7 +93,7 @@ async function authorizeClient({ clientMac, apMac, radioId, duration, limitDown,
   const res = await omadaHttp.post(
     `/${omadaControllerId}/api/v2/hotspot/extPortal/auth`,
     payload,
-    { headers: { Cookie: sessionCookie } }
+    { headers: { Cookie: sessionCookie, 'Csrf-Token': omadaCsrfToken } }
   );
 
   if (res.data.errorCode !== 0) {
