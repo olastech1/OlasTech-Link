@@ -15,7 +15,7 @@ module.exports = async function (req, res) {
     const activeSessionsRes = await db.query(`
       SELECT * FROM sessions 
       WHERE expires_at > CURRENT_TIMESTAMP
-      ORDER BY created_at DESC
+      ORDER BY started_at DESC
     `);
     
     const activeSessions = activeSessionsRes.rows;
