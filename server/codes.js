@@ -5,7 +5,6 @@
 
 const db = require('./db');
 const crypto = require('crypto');
-const omada = require('./omada');
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 0, 1 (ambiguous)
 
@@ -15,26 +14,21 @@ async function codeExists(code) {
 }
 
 /**
- * Generate a unique access code for a given plan via Native Omada Voucher API.
+ * Generate a unique access code for a given plan.
  */
 async function generateCode(planId, paymentRef, email = null) {
   const res = await db.query('SELECT * FROM plans WHERE id = $1', [planId]);
   const plan = res.rows[0];
   if (!plan) throw new Error(`Unknown plan: ${planId}`);
 
-  let codes;
-  try {
-    codes = await omada.createVouchers({ 
-      count: 1, 
-      duration_h: plan.duration_h, 
-      data_mb: plan.data_mb, 
-      devices: plan.devices 
-    });
-  } catch (err) {
-    throw new Error('Failed to create Omada Voucher: ' + err.message);
-  }
-  
-  const code = codes[0];
+  let code;
+  let attempts = 0;
+  const prefix = (plan.name || 'C').charAt(0).toUpperCase();
+
+  do {
+    if (attempts++ > 50) throw new Error('Failed to generate unique code');
+    code = `${prefix}${randomChars(3)}-${randomChars(4)}`;
+  } while (await codeExists(code));
 
   // Data plans never expire by time until data is used. Time-based plans expire based on duration.
   let expiresAt = null;
@@ -154,37 +148,14 @@ async function redeemCode(code, clientMac) {
 }
 
 /**
- * Create a batch of codes (for voucher printing) via Omada API.
+ * Create a batch of codes (for voucher printing).
  */
 async function generateBatch(planId, count = 10) {
-  const res = await db.query('SELECT * FROM plans WHERE id = $1', [planId]);
-  const plan = res.rows[0];
-  if (!plan) throw new Error(`Unknown plan: ${planId}`);
-
-  let codes;
-  try {
-    codes = await omada.createVouchers({ 
-      count: count, 
-      duration_h: plan.duration_h, 
-      data_mb: plan.data_mb, 
-      devices: plan.devices 
-    });
-  } catch (err) {
-    throw new Error('Failed to create Omada Vouchers: ' + err.message);
+  const codes = [];
+  for (let i = 0; i < count; i++) {
+    const c = await generateCode(planId, null);
+    codes.push(c);
   }
-
-  let expiresAt = null;
-  if (!plan.data_mb) {
-    expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
-  }
-
-  for (const code of codes) {
-    await db.query(`
-      INSERT INTO access_codes (code, plan_id, duration_h, data_mb, payment_ref, expires_at, email)
-      VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [code, planId, plan.duration_h, plan.data_mb, null, expiresAt, null]);
-  }
-
   return codes;
 }
 
