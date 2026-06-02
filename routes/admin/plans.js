@@ -20,6 +20,16 @@ module.exports = async function (req, res) {
         return res.status(400).json({ error: 'Missing required fields' });
       }
 
+      let parsedDuration = parseInt(duration_h, 10);
+      if (isNaN(parsedDuration) || parsedDuration <= 0) {
+        parsedDuration = 87600; // ~10 years (Unlimited)
+      }
+
+      let parsedData = parseInt(data_mb, 10);
+      if (isNaN(parsedData) || parsedData <= 0) {
+        parsedData = null; // Unlimited data
+      }
+
       // Upsert plan
       await db.query(`
         INSERT INTO plans (id, name, price, duration_h, data_mb, devices, is_popular, is_best_value)
@@ -32,7 +42,7 @@ module.exports = async function (req, res) {
           devices = EXCLUDED.devices,
           is_popular = EXCLUDED.is_popular,
           is_best_value = EXCLUDED.is_best_value
-      `, [id, name, price, duration_h, data_mb || null, devices, is_popular || false, is_best_value || false]);
+      `, [id, name, price, parsedDuration, parsedData, devices, is_popular || false, is_best_value || false]);
 
       return res.json({ success: true });
     }
