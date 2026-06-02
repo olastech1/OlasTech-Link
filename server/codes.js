@@ -8,11 +8,11 @@ const crypto = require('crypto');
 
 // ── Plan definitions ─────────────────────────────────────────────
 const PLANS = {
-  '300gb':   { name: '300GB',           price: 35000, duration_h: 720, data_mb: 307200, devices: 10, prefix: 'X' },
-  '250gb':   { name: '250GB',           price: 20000, duration_h: 720, data_mb: 256000, devices: 5,  prefix: 'V' },
-  '150gb':   { name: '150GB',           price: 15000, duration_h: 720, data_mb: 153600, devices: 4,  prefix: 'L' },
-  '110gb':   { name: '110GB',           price: 12000, duration_h: 720, data_mb: 112640, devices: 4,  prefix: 'M' },
-  '50gb':    { name: '50GB',            price: 5000,  duration_h: 720, data_mb: 51200,  devices: 4,  prefix: 'S' },
+  '300gb':   { name: '300GB',           price: 35000, duration_h: 87600, data_mb: 307200, devices: 10, prefix: 'X' },
+  '250gb':   { name: '250GB',           price: 20000, duration_h: 87600, data_mb: 256000, devices: 5,  prefix: 'V' },
+  '150gb':   { name: '150GB',           price: 15000, duration_h: 87600, data_mb: 153600, devices: 4,  prefix: 'L' },
+  '110gb':   { name: '110GB',           price: 12000, duration_h: 87600, data_mb: 112640, devices: 4,  prefix: 'M' },
+  '50gb':    { name: '50GB',            price: 5000,  duration_h: 87600, data_mb: 51200,  devices: 4,  prefix: 'S' },
   'weekend': { name: 'Weekend Unltd',   price: 10000, duration_h: 48,  data_mb: null,   devices: 5,  prefix: 'W' },
   'daily':   { name: 'Daily Unltd',     price: 3000,  duration_h: 24,  data_mb: null,   devices: 3,  prefix: 'D' },
 };
@@ -42,8 +42,12 @@ async function generateCode(planId, paymentRef, email = null) {
     code = `${plan.prefix}${part1}-${part2}`;
   } while (await codeExists(code));
 
-  // Calculate expiry (from now, giving user 48h to use the code before it auto-expires)
-  const expiresAt = new Date(Date.now() + 48 * 60 * 60 * 1000).toISOString();
+  // Data plans never expire by time until data is used. Time-based plans expire based on duration.
+  let expiresAt = null;
+  if (!plan.data_mb) {
+    // If it's an unlimited data plan (daily/weekend), give them 30 days to START using it
+    expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  }
 
   await db.query(`
     INSERT INTO access_codes (code, plan_id, duration_h, data_mb, payment_ref, expires_at, email)

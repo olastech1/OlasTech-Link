@@ -98,11 +98,11 @@ async function authorizeClient({ clientMac, apMac, ssidName, radioId, duration }
  */
 async function grantAccess({ clientMac, apMac, ssidName, radioId, planId }) {
   const limits = {
-    '300gb':   { duration: 720 * 60 },
-    '250gb':   { duration: 720 * 60 },
-    '150gb':   { duration: 720 * 60 },
-    '110gb':   { duration: 720 * 60 },
-    '50gb':    { duration: 720 * 60 },
+    '300gb':   { duration: 87600 * 60 },
+    '250gb':   { duration: 87600 * 60 },
+    '150gb':   { duration: 87600 * 60 },
+    '110gb':   { duration: 87600 * 60 },
+    '50gb':    { duration: 87600 * 60 },
     'weekend': { duration: 48 * 60 },
     'daily':   { duration: 24 * 60 },
   };
