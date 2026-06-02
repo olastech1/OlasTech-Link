@@ -1,13 +1,16 @@
 /**
  * omada.js — TP-Link Omada Controller API Client
- * Authenticates with the Omada controller and authorizes
- * a client device for internet access.
  *
- * Docs: Omada SDN Controller API Guide (v5.x)
- * https://www.tp-link.com/en/support/download/omada-software-controller/
+ * Designed for Vercel serverless: every exported function performs
+ * a fresh login + action in one atomic call.  Module-level state cannot
+ * be relied on between invocations on Vercel.
  *
- * IMPORTANT: The Omada controller uses self-signed TLS certificates.
- * We disable SSL verification for local connections (not for production).
+ * Tested against Omada SDN Controller 5.15.x (apiVer 3).
+ * Auth endpoint: POST /<cid>/api/v2/hotspot/login  { name, password }
+ * Auth returns:  { errorCode:0, result:{ token: "…" } }
+ * Access endpoint: POST /<cid>/api/v2/hotspot/extPortal/auth
+ *   Headers: Cookie + Csrf-Token
+ *   Body: { clientMac, apMac, ssidName, radioId, time, authType, site }
  */
 
 const axios = require('axios');
@@ -22,27 +25,24 @@ const PASSWORD       = process.env.OMADA_PASSWORD        || 'admin';
 // Allow self-signed certs on local Omada controllers
 const agent = new https.Agent({ rejectUnauthorized: false });
 
-const omadaHttp = axios.create({
+const http = axios.create({
   baseURL: CONTROLLER_URL,
   httpsAgent: agent,
-  timeout: 10000,
+  timeout: 15000,
 });
 
-let sessionCookie = null;
-let omadaControllerId = null;
-let omadaCsrfToken = null;
-
 /**
- * Login to Omada Controller. Returns controller ID (needed for all API calls).
+ * Login to Omada as a Hotspot Operator.
+ * Returns { cid, cookie, token } for use in subsequent calls.
  */
-async function login() {
-  // Step 1: Get controller info
-  const infoRes = await omadaHttp.get('/api/info');
-  omadaControllerId = infoRes.data.result.omadacId;
+async function _login() {
+  // 1. Get controller ID
+  const infoRes = await http.get('/api/info');
+  const cid = infoRes.data.result.omadacId;
 
-  // Step 2: Login using standard admin endpoint
-  const loginRes = await omadaHttp.post(`/${omadaControllerId}/api/v2/hotspot/login`, {
-    name: USERNAME, // Hotspot Operator uses 'name', not 'username'
+  // 2. Login as Hotspot Operator
+  const loginRes = await http.post(`/${cid}/api/v2/hotspot/login`, {
+    name: USERNAME,
     password: PASSWORD,
   });
 
@@ -50,60 +50,44 @@ async function login() {
     throw new Error(`Omada login failed: ${loginRes.data.msg}`);
   }
 
-  // Extract CSRF Token (Required in Omada 5.0.15+)
-  omadaCsrfToken = loginRes.data.result.token;
-
-  // Store session cookie
+  // 3. Extract cookie and CSRF token (both required for v5.0.15+)
   const cookies = loginRes.headers['set-cookie'];
-  sessionCookie = cookies ? cookies.map((c) => c.split(';')[0]).join('; ') : null;
+  const cookie  = cookies ? cookies.map((c) => c.split(';')[0]).join('; ') : '';
+  const token   = loginRes.data.result.token;
 
-  return omadaControllerId;
+  return { cid, cookie, token };
 }
 
 /**
  * Authorize a client device for internet access.
- *
- * @param {string} clientMac  - Client MAC address (from Omada URL params)
- * @param {string} apMac      - AP MAC address (from Omada URL params)
- * @param {string} radioId    - Radio ID (from Omada URL params)
- * @param {number} duration   - Duration in minutes
- * @param {number} [limitDown] - Download limit in KB/s (optional)
- * @param {number} [limitUp]   - Upload limit in KB/s (optional)
+ * Each call does a fresh login then immediately sends the auth command.
  */
-async function authorizeClient({ clientMac, apMac, radioId, duration, limitDown, limitUp }) {
-  // Ensure logged in
-  if (!sessionCookie || !omadaControllerId) {
-    await login();
-  }
+async function authorizeClient({ clientMac, apMac, ssidName, radioId, duration }) {
+  const { cid, cookie, token } = await _login();
 
   const payload = {
-    mac: clientMac,
-    ap: apMac,
+    clientMac,            // e.g. "AA-BB-CC-DD-EE-FF"
+    apMac,                // e.g. "11-22-33-44-55-66"
+    ssidName: ssidName || SITE_NAME,
     radioId: parseInt(radioId, 10) || 0,
-    ssidIndex: 0,
-    time: duration,           // in minutes
-    ...(limitDown && { limitDown }),
-    ...(limitUp   && { limitUp }),
+    time: duration,       // in minutes
+    authType: 4,          // 4 = External Portal auth
+    site: SITE_NAME,
   };
 
-  // Omada v5 requires the 'site' parameter in the body, not the URL
-  payload.site = SITE_NAME;
-  payload.ssidName = payload.ssidName || 'OlasTech Hotspot';
-
-  const res = await omadaHttp.post(
-    `/${omadaControllerId}/api/v2/hotspot/extPortal/auth`,
+  const res = await http.post(
+    `/${cid}/api/v2/hotspot/extPortal/auth`,
     payload,
-    { headers: { Cookie: sessionCookie, 'Csrf-Token': omadaCsrfToken } }
+    { headers: { Cookie: cookie, 'Csrf-Token': token } }
   );
 
+  // If we get back HTML instead of JSON, the path is wrong
+  if (typeof res.data !== 'object') {
+    throw new Error('Omada returned unexpected HTML — check extPortal/auth path');
+  }
+
   if (res.data.errorCode !== 0) {
-    // Session may have expired — retry once after re-login
-    if (res.data.errorCode === -1006 || res.data.errorCode === -30109) {
-      sessionCookie = null;
-      await login();
-      return authorizeClient({ clientMac, apMac, radioId, duration, limitDown, limitUp });
-    }
-    throw new Error(`Omada auth failed: ${res.data.msg}`);
+    throw new Error(`Omada auth failed: ${res.data.msg} (code ${res.data.errorCode})`);
   }
 
   return true;
@@ -112,7 +96,7 @@ async function authorizeClient({ clientMac, apMac, radioId, duration, limitDown,
 /**
  * Convenience wrapper — authorizes with duration limits per plan.
  */
-async function grantAccess({ clientMac, apMac, radioId, planId }) {
+async function grantAccess({ clientMac, apMac, ssidName, radioId, planId }) {
   const limits = {
     '300gb':   { duration: 720 * 60 },
     '250gb':   { duration: 720 * 60 },
@@ -125,53 +109,40 @@ async function grantAccess({ clientMac, apMac, radioId, planId }) {
 
   const { duration } = limits[planId] || limits['daily'];
 
-  await authorizeClient({
-    clientMac,
-    apMac,
-    radioId,
-    duration,
-  });
+  await authorizeClient({ clientMac, apMac, ssidName, radioId, duration });
 
   return { duration };
 }
 
 /**
- * Get active client stats for data tracking
- * Returns array of clients: { mac, rxBytes, txBytes, trafficDown, trafficUp }
+ * Get active client stats for data tracking.
  */
 async function getClientStats() {
-  if (!sessionCookie || !omadaControllerId) await login();
+  const { cid, cookie, token } = await _login();
 
-  const res = await omadaHttp.get(
-    `/${omadaControllerId}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/clients`,
-    { headers: { Cookie: sessionCookie }, params: { currentPageSize: 9999 } }
+  const res = await http.get(
+    `/${cid}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/clients`,
+    { headers: { Cookie: cookie, 'Csrf-Token': token }, params: { currentPageSize: 9999 } }
   );
 
-  if (res.data.errorCode !== 0) {
-    if (res.data.errorCode === -1006 || res.data.errorCode === -30109) {
-      sessionCookie = null;
-      await login();
-      return getClientStats();
-    }
-    return [];
-  }
+  if (typeof res.data !== 'object' || res.data.errorCode !== 0) return [];
 
   return res.data.result.data || [];
 }
 
 /**
- * Disconnect/Unauthorize a client who ran out of data
+ * Disconnect / unauthorize a client who ran out of data.
  */
 async function unauthorizeClient(clientMac) {
-  if (!sessionCookie || !omadaControllerId) await login();
+  const { cid, cookie, token } = await _login();
 
-  const res = await omadaHttp.post(
-    `/${omadaControllerId}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/cmd/hotspot/unauth`,
+  const res = await http.post(
+    `/${cid}/api/v2/sites/${encodeURIComponent(SITE_NAME)}/cmd/hotspot/unauth`,
     { mac: clientMac },
-    { headers: { Cookie: sessionCookie } }
+    { headers: { Cookie: cookie, 'Csrf-Token': token } }
   );
 
-  return res.data.errorCode === 0;
+  return typeof res.data === 'object' && res.data.errorCode === 0;
 }
 
-module.exports = { login, authorizeClient, grantAccess, getClientStats, unauthorizeClient };
+module.exports = { authorizeClient, grantAccess, getClientStats, unauthorizeClient };
