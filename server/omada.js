@@ -159,7 +159,7 @@ async function getClientStats() {
   // 2. Fetch clients using the exact siteId
   const res = await http.get(
     `/${cid}/api/v2/sites/${siteId}/clients`,
-    { headers: { Cookie: cookie, 'Csrf-Token': token }, params: { currentPageSize: 9999 } }
+    { headers: { Cookie: cookie, 'Csrf-Token': token }, params: { currentPageSize: 9999, currentPage: 1 } }
   );
 
   if (typeof res.data !== 'object') {
