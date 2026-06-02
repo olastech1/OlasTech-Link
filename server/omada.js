@@ -62,7 +62,7 @@ async function _adminLogin() {
   const infoRes = await http.get('/api/info');
   const cid = infoRes.data.result.omadacId;
 
-  const loginRes = await http.post(`/api/v2/login`, {
+  const loginRes = await http.post(`/${cid}/api/v2/login`, {
     username: USERNAME,
     password: PASSWORD,
   });
