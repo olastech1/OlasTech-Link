@@ -156,9 +156,9 @@ async function getClientStats() {
   }
   const siteId = site.key || site.id;
 
-  // 2. Fetch clients using the exact siteId (using insight/clients which is more stable)
+  // 2. Fetch hotspot clients using the exact siteId to match the Omada Dashboard exactly
   const res = await http.get(
-    `/${cid}/api/v2/sites/${siteId}/insight/clients`,
+    `/${cid}/api/v2/hotspot/sites/${siteId}/clients`,
     { headers: { Cookie: cookie, 'Csrf-Token': token }, params: { currentPageSize: 9999, currentPage: 1 } }
   );
 
@@ -170,7 +170,9 @@ async function getClientStats() {
     throw new Error(`Omada clients API failed: ${res.data.msg} (code ${res.data.errorCode})`);
   }
 
-  return res.data.result.data || [];
+  const allHotspotClients = res.data.result.data || [];
+  // Only return valid (active) hotspot sessions to avoid picking up expired history
+  return allHotspotClients.filter(c => c.valid === true);
 }
 
 /**
