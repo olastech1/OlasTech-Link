@@ -28,10 +28,13 @@ module.exports = async function (req, res) {
       return res.json({ success: true, message: 'No clients found in Omada.' });
     }
 
-    // Map Omada clients by uppercase MAC
+    // Normalize MACs to just uppercase alphanumeric
+    const formatMac = (m) => (m || '').replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+
+    // Map Omada clients by normalized MAC
     const omadaClients = {};
     for (const c of clients) {
-      if (c.mac) omadaClients[c.mac.toUpperCase()] = c;
+      if (c.mac) omadaClients[formatMac(c.mac)] = c;
     }
 
     // 3. Process each session
@@ -39,7 +42,7 @@ module.exports = async function (req, res) {
     let disconnected = 0;
 
     for (const session of activeSessions) {
-      const mac = session.client_mac.toUpperCase();
+      const mac = formatMac(session.client_mac);
       const omadaClient = omadaClients[mac];
       
       if (!omadaClient) continue; // Client is not currently connected to WiFi
@@ -81,8 +84,8 @@ module.exports = async function (req, res) {
       // 4. Check Limits
       const plan = PLANS[session.plan_id];
       if (plan && plan.data_mb && newUsedMb >= plan.data_mb) {
-        // Unauthorize from Omada
-        await unauthorizeClient(mac);
+        // Unauthorize from Omada using the original MAC string it expects
+        await unauthorizeClient(omadaClient.mac);
         
         // Mark session as expired
         await db.query(`
