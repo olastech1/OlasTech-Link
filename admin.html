@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OlasTech Admin — Control Panel</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #0a0c12;
+      --surface:  #111622;
+      --card:     #161d2e;
+      --border:   #1e2a42;
+      --accent:   #3b82f6;
+      --accent2:  #06b6d4;
+      --green:    #10b981;
+      --red:      #ef4444;
+      --yellow:   #f59e0b;
+      --text:     #e2e8f0;
+      --muted:    #64748b;
+      --radius:   14px;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── LOGIN ──────────────────────────────────── */
+    #login-screen {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 24px;
+      background: radial-gradient(ellipse at 50% 0%, #1a2a4a 0%, var(--bg) 60%);
+    }
+
+    .login-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 48px;
+      width: 100%;
+      max-width: 420px;
+      text-align: center;
+      box-shadow: 0 32px 80px rgba(0,0,0,0.5);
+    }
+
+    .login-logo {
+      width: 64px; height: 64px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 18px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 28px;
+      margin: 0 auto 24px;
+      box-shadow: 0 8px 32px rgba(59,130,246,0.3);
+    }
+
+    .login-box h1 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+    .login-box p  { color: var(--muted); font-size: 14px; margin-bottom: 32px; }
+
+    .field { text-align: left; margin-bottom: 20px; }
+    .field label { display: block; font-size: 12px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+    .field input {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 15px;
+      padding: 12px 16px;
+      outline: none;
+      transition: border-color .2s;
+    }
+    .field input:focus { border-color: var(--accent); }
+
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+      padding: 12px 24px;
+      border: none; border-radius: 10px;
+      font-family: inherit; font-size: 14px; font-weight: 600;
+      cursor: pointer; transition: all .2s; text-decoration: none;
+    }
+    .btn-primary { background: var(--accent); color: #fff; width: 100%; }
+    .btn-primary:hover { background: #2563eb; transform: translateY(-1px); }
+    .btn-sm { padding: 7px 14px; font-size: 13px; border-radius: 8px; }
+    .btn-green { background: var(--green); color: #fff; }
+    .btn-green:hover { background: #059669; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--muted); }
+    .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-red { background: rgba(239,68,68,.15); color: var(--red); border: 1px solid rgba(239,68,68,.3); }
+
+    #login-error { color: var(--red); font-size: 13px; margin-top: 12px; min-height: 18px; }
+
+    /* ── APP SHELL ───────────────────────────────── */
+    #app { display: none; min-height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0; width: 220px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      padding: 24px 0;
+      z-index: 100;
+    }
+
+    .sidebar-logo {
+      padding: 0 20px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; gap: 12px;
+    }
+    .sidebar-logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px; flex-shrink: 0;
+    }
+    .sidebar-logo-text { font-weight: 700; font-size: 15px; }
+    .sidebar-logo-sub  { font-size: 11px; color: var(--muted); }
+
+    .nav { padding: 16px 12px; flex: 1; }
+    .nav-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px;
+      border-radius: 10px;
+      font-size: 14px; font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all .15s;
+      margin-bottom: 2px;
+      border: none; background: none; width: 100%; text-align: left;
+    }
+    .nav-item:hover { background: var(--card); color: var(--text); }
+    .nav-item.active { background: rgba(59,130,246,.12); color: var(--accent); }
+    .nav-icon { font-size: 16px; width: 20px; text-align: center; }
+
+    .sidebar-footer {
+      padding: 16px 12px 0;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Main */
+    .main { margin-left: 220px; padding: 32px; min-height: 100vh; }
+
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* Header */
+    .page-header { margin-bottom: 28px; }
+    .page-header h2 { font-size: 22px; font-weight: 700; }
+    .page-header p { color: var(--muted); font-size: 14px; margin-top: 4px; }
+
+    /* Stats */
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 28px; }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .stat-label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 10px; }
+    .stat-value { font-size: 28px; font-weight: 700; }
+    .stat-sub   { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .stat-card.green .stat-value { color: var(--green); }
+    .stat-card.blue  .stat-value { color: var(--accent); }
+    .stat-card.red   .stat-value { color: var(--red); }
+    .stat-card.yellow .stat-value { color: var(--yellow); }
+
+    /* Card */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .card-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      flex-wrap: wrap;
+    }
+    .card-title { font-size: 15px; font-weight: 600; }
+
+    /* Filters */
+    .filters { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    .filter-select {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      outline: none;
+      cursor: pointer;
+    }
+    .search-input {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-family: inherit;
+      font-size: 13px;
+      padding: 7px 12px;
+      outline: none;
+      width: 200px;
+    }
+    .search-input:focus, .filter-select:focus { border-color: var(--accent); }
+
+    /* Table */
+    .table-wrap { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    thead th {
+      padding: 12px 24px;
+      text-align: left;
+      font-size: 11px; font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase; letter-spacing: .06em;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+    }
+    tbody tr { border-bottom: 1px solid var(--border); transition: background .1s; }
+    tbody tr:last-child { border-bottom: none; }
+    tbody tr:hover { background: rgba(255,255,255,.02); }
+    tbody td { padding: 14px 24px; vertical-align: middle; }
+
+    /* Badges */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 3px 10px;
+      border-radius: 20px;
+      font-size: 11px; font-weight: 600;
+      text-transform: uppercase; letter-spacing: .04em;
+    }
+    .badge-green  { background: rgba(16,185,129,.15);  color: var(--green); }
+    .badge-blue   { background: rgba(59,130,246,.15);  color: var(--accent); }
+    .badge-red    { background: rgba(239,68,68,.15);   color: var(--red); }
+    .badge-yellow { background: rgba(245,158,11,.15);  color: var(--yellow); }
+    .badge-gray   { background: rgba(100,116,139,.15); color: var(--muted); }
+
+    /* Code copy */
+    .code-cell {
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: var(--accent2);
+      font-weight: 600;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .copy-btn {
+      background: none; border: none; cursor: pointer;
+      color: var(--muted); padding: 2px 4px; border-radius: 4px;
+      font-size: 14px; transition: color .15s;
+    }
+    .copy-btn:hover { color: var(--accent); }
+    .copy-btn.copied { color: var(--green); }
+
+    /* Modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0,0,0,.7); backdrop-filter: blur(4px);
+      z-index: 200; align-items: center; justify-content: center; padding: 24px;
+    }
+    .modal-overlay.open { display: flex; }
+    .modal {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 32px;
+      width: 100%; max-width: 480px;
+      animation: slideUp .2s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .modal h3 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
+    .modal p  { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+    .modal-footer { display: flex; gap: 10px; justify-content: flex-end; margin-top: 24px; }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+
+    /* Generated codes list */
+    .code-list {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px;
+      margin-top: 16px;
+      max-height: 280px;
+      overflow-y: auto;
+      display: none;
+    }
+    .code-list.show { display: block; }
+    .code-list-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid var(--border);
+      font-family: monospace;
+      font-size: 14px; color: var(--accent2);
+    }
+    .code-list-item:last-child { border-bottom: none; }
+    .copy-all-btn {
+      margin-top: 12px; width: 100%;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center; padding: 60px 24px;
+      color: var(--muted);
+    }
+    .empty-state .icon { font-size: 40px; margin-bottom: 12px; }
+    .empty-state p { font-size: 14px; }
+
+    /* Loading spinner */
+    .spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,.2);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Toast */
+    #toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; padding: 14px 20px;
+      font-size: 14px; font-weight: 500;
+      box-shadow: 0 8px 32px rgba(0,0,0,.4);
+      transform: translateY(80px); opacity: 0;
+      transition: all .3s;
+      z-index: 999;
+      display: flex; align-items: center; gap: 10px;
+    }
+    #toast.show { transform: translateY(0); opacity: 1; }
+    #toast.success { border-color: var(--green); color: var(--green); }
+    #toast.error   { border-color: var(--red);   color: var(--red); }
+
+    /* Responsive */
+    @media (max-width: 900px) {
+      .sidebar { display: none; }
+      .main { margin-left: 0; padding: 20px; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 480px) {
+      .stats-grid { grid-template-columns: 1fr 1fr; }
+      .form-row { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN SCREEN -->
+<div id="login-screen">
+  <div class="login-box">
+    <div class="login-logo">⚡</div>
+    <h1>Admin Control Panel</h1>
+    <p>OlasTech Link — Staff Access Only</p>
+    <div class="field">
+      <label>Admin Key</label>
+      <input type="password" id="admin-key-input" placeholder="Enter your admin key…" autocomplete="current-password" />
+    </div>
+    <button class="btn btn-primary" onclick="doLogin()" id="login-btn">Sign In</button>
+    <div id="login-error"></div>
+  </div>
+</div>
+
+<!-- MAIN APP -->
+<div id="app">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="sidebar-logo-icon">⚡</div>
+      <div>
+        <div class="sidebar-logo-text">OlasTech</div>
+        <div class="sidebar-logo-sub">Admin Panel</div>
+      </div>
+    </div>
+
+    <nav class="nav">
+      <button class="nav-item active" data-page="overview" onclick="showPage('overview')">
+        <span class="nav-icon">📊</span> Overview
+      </button>
+      <button class="nav-item" data-page="tokens" onclick="showPage('tokens')">
+        <span class="nav-icon">🎫</span> Access Tokens
+      </button>
+      <button class="nav-item" data-page="payments" onclick="showPage('payments')">
+        <span class="nav-icon">💳</span> Payments
+      </button>
+      <button class="nav-item" data-page="generate" onclick="showPage('generate')">
+        <span class="nav-icon">✨</span> Generate Codes
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <button class="nav-item btn-ghost" onclick="logout()" style="color:var(--red)">
+        <span class="nav-icon">🚪</span> Sign Out
+      </button>
+    </div>
+  </aside>
+
+  <main class="main">
+
+    <!-- OVERVIEW PAGE -->
+    <div class="page active" id="page-overview">
+      <div class="page-header">
+        <h2>Overview</h2>
+        <p>Live stats for your OlasTech hotspot network</p>
+      </div>
+
+      <div class="stats-grid">
+        <div class="stat-card green">
+          <div class="stat-label">Active Tokens</div>
+          <div class="stat-value" id="stat-active">—</div>
+          <div class="stat-sub">Ready to use</div>
+        </div>
+        <div class="stat-card blue">
+          <div class="stat-label">Total Tokens</div>
+          <div class="stat-value" id="stat-total">—</div>
+          <div class="stat-sub">All time</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="stat-label">Revenue</div>
+          <div class="stat-value" id="stat-revenue">—</div>
+          <div class="stat-sub">Successful payments</div>
+        </div>
+        <div class="stat-card red">
+          <div class="stat-label">Used Tokens</div>
+          <div class="stat-value" id="stat-used">—</div>
+          <div class="stat-sub">Redeemed</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Recent Payments</span>
+          <button class="btn btn-ghost btn-sm" onclick="loadPayments()">Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Email</th>
+                <th>Plan</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Reference</th>
+              </tr>
+            </thead>
+            <tbody id="overview-payments-tbody">
+              <tr><td colspan="6" class="empty-state"><div class="icon">⏳</div><p>Loading…</p></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- TOKENS PAGE -->
+    <div class="page" id="page-tokens">
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px">
+        <div>
+          <h2>Access Tokens</h2>
+          <p>View, filter and copy all access codes</p>
+        </div>
+        <button class="btn btn-green btn-sm" onclick="showPage('generate')">✨ Generate New</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" id="token-count">All Tokens</span>
+          <div class="filters">
+            <input type="search" class="search-input" placeholder="Search code…" id="token-search" oninput="filterTokens()" />
+            <select class="filter-select" id="token-status-filter" onchange="loadTokens()">
+              <option value="">All Status</option>
+              <option value="active">Active</option>
+              <option value="used">Used</option>
+              <option value="expired">Expired</option>
+            </select>
+            <select class="filter-select" id="token-plan-filter" onchange="loadTokens()">
+              <option value="">All Plans</option>
+              <option value="300gb">300GB</option>
+              <option value="250gb">250GB</option>
+              <option value="150gb">150GB</option>
+              <option value="110gb">110GB</option>
+              <option value="50gb">50GB</option>
+              <option value="weekend">Weekend</option>
+              <option value="daily">Daily</option>
+            </select>
+            <button class="btn btn-ghost btn-sm" onclick="loadTokens()">↻ Refresh</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Code</th>
+                <th>Plan</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Used At</th>
+                <th>Used By</th>
+              </tr>
+            </thead>
+            <tbody id="tokens-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- PAYMENTS PAGE -->
+    <div class="page" id="page-payments">
+      <div class="page-header">
+        <h2>Payments</h2>
+        <p>All payment transactions on OlasTech Link</p>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" id="payment-count">All Payments</span>
+          <button class="btn btn-ghost btn-sm" onclick="loadPayments()">↻ Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Email</th>
+                <th>Plan</th>
+                <th>Amount (₦)</th>
+                <th>Status</th>
+                <th>Reference</th>
+              </tr>
+            </thead>
+            <tbody id="payments-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- GENERATE PAGE -->
+    <div class="page" id="page-generate">
+      <div class="page-header">
+        <h2>Generate Codes</h2>
+        <p>Create access codes to sell or hand out to customers</p>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-bottom:28px">
+        <!-- Plan cards -->
+        <div class="card" style="padding:20px">
+          <div style="font-size:22px;margin-bottom:8px">🚀</div>
+          <div style="font-weight:700;font-size:16px">300GB Plan</div>
+          <div style="color:var(--muted);font-size:13px;margin:4px 0 12px">₦35,000 · 30 days · 10 devices</div>
+          <button class="btn btn-primary btn-sm" onclick="openGenModal('300gb','300GB – ₦35,000')">Generate</button>
+        </div>
+        <div class="card" style="padding:20px">
+          <div style="font-size:22px;margin-bottom:8px">💎</div>
+          <div style="font-weight:700;font-size:16px">250GB Plan</div>
+          <div style="color:var(--muted);font-size:13px;margin:4px 0 12px">₦20,000 · 30 days · 5 devices</div>
+          <button class="btn btn-primary btn-sm" onclick="openGenModal('250gb','250GB – ₦20,000')">Generate</button>
+        </div>
+        <div class="card" style="padding:20px">
+          <div style="font-size:22px;margin-bottom:8px">⚡</div>
+          <div style="font-weight:700;font-size:16px">150GB Plan</div>
+          <div style="color:var(--muted);font-size:13px;margin:4px 0 12px">₦15,000 · 30 days · 4 devices</div>
+          <button class="btn btn-primary btn-sm" onclick="openGenModal('150gb','150GB – ₦15,000')">Generate</button>
+        </div>
+        <div class="card" style="padding:20px">
+          <div style="font-size:22px;margin-bottom:8px">📡</div>
+          <div style="font-weight:700;font-size:16px">110GB Plan</div>
+          <div style="color:var(--muted);font-size:13px;margin:4px 0 12px">₦12,000 · 30 days · 4 devices</div>
+          <button class="btn btn-primary btn-sm" onclick="openGenModal('110gb','110GB – ₦12,000')">Generate</button>
+        </div>
+        <div class="card" style="padding:20px">
+          <div style="font-size:22px;margin-bottom:8px">📦</div>
+          <div style="font-weight:700;font-size:16px">50GB Plan</div>
+          <div style="color:var(--muted);font-size:13px;margin:4px 0 12px">₦5,000 · 30 days · 4 devices</div>
+          <button class="btn btn-primary btn-sm" onclick="openGenModal('50gb','50GB – ₦5,000')">Generate</button>
+        </div>
+        <div class="card" style="padding:20px">
+          <div style="font-size:22px;margin-bottom:8px">🌙</div>
+          <div style="font-weight:700;font-size:16px">Weekend Unlimited</div>
+          <div style="color:var(--muted);font-size:13px;margin:4px 0 12px">₦10,000 · 48 hours · 5 devices</div>
+          <button class="btn btn-primary btn-sm" onclick="openGenModal('weekend','Weekend – ₦10,000')">Generate</button>
+        </div>
+        <div class="card" style="padding:20px">
+          <div style="font-size:22px;margin-bottom:8px">☀️</div>
+          <div style="font-weight:700;font-size:16px">Daily Unlimited</div>
+          <div style="color:var(--muted);font-size:13px;margin:4px 0 12px">₦3,000 · 24 hours · 3 devices</div>
+          <button class="btn btn-primary btn-sm" onclick="openGenModal('daily','Daily – ₦3,000')">Generate</button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- GENERATE MODAL -->
+<div class="modal-overlay" id="gen-modal">
+  <div class="modal">
+    <h3>Generate Access Codes</h3>
+    <p id="gen-modal-subtitle">Select how many codes to generate</p>
+    <div class="field">
+      <label>Number of Codes (max 200)</label>
+      <input type="number" id="gen-count" value="5" min="1" max="200" />
+    </div>
+    <div id="gen-code-list" class="code-list"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeGenModal()">Cancel</button>
+      <button class="btn btn-green btn-sm" id="gen-btn" onclick="doGenerate()">✨ Generate</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div id="toast"></div>
+
+<script>
+  /* ─── State ─────────────────────────────────── */
+  let ADMIN_KEY = '';
+  let allTokens  = [];
+  let allPayments = [];
+  let currentPlanId = '';
+
+  /* ─── Login ─────────────────────────────────── */
+  document.getElementById('admin-key-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') doLogin();
+  });
+
+  async function doLogin() {
+    const key = document.getElementById('admin-key-input').value.trim();
+    if (!key) return;
+
+    const btn = document.getElementById('login-btn');
+    btn.innerHTML = '<span class="spinner"></span> Checking…';
+    btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/admin/codes?limit=1', {
+        headers: { 'x-admin-key': key }
+      });
+      if (res.status === 401) throw new Error('Invalid admin key.');
+
+      ADMIN_KEY = key;
+      document.getElementById('login-screen').style.display = 'none';
+      document.getElementById('app').style.display = 'block';
+      loadAll();
+    } catch (err) {
+      document.getElementById('login-error').textContent = err.message;
+      btn.innerHTML = 'Sign In';
+      btn.disabled = false;
+    }
+  }
+
+  function logout() {
+    ADMIN_KEY = '';
+    document.getElementById('app').style.display = 'none';
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('admin-key-input').value = '';
+  }
+
+  /* ─── Navigation ─────────────────────────────── */
+  function showPage(id) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + id).classList.add('active');
+    document.querySelector(`[data-page="${id}"]`).classList.add('active');
+    if (id === 'tokens')   loadTokens();
+    if (id === 'payments') loadPayments();
+  }
+
+  /* ─── Load all data ───────────────────────────── */
+  async function loadAll() {
+    await Promise.all([loadTokens(), loadPayments()]);
+  }
+
+  /* ─── Tokens ─────────────────────────────────── */
+  async function loadTokens() {
+    const status = document.getElementById('token-status-filter')?.value || '';
+    const planId = document.getElementById('token-plan-filter')?.value   || '';
+    let url = '/api/admin/codes?limit=500';
+    if (status) url += '&status=' + status;
+    if (planId) url += '&planId=' + planId;
+
+    const tbody = document.getElementById('tokens-tbody');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--muted)"><span class="spinner"></span></td></tr>';
+
+    try {
+      const res  = await fetch(url, { headers: { 'x-admin-key': ADMIN_KEY } });
+      const data = await res.json();
+      allTokens = data.codes || [];
+      renderTokens(allTokens);
+      updateStats(allTokens);
+    } catch {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state"><div class="icon">⚠️</div><p>Failed to load tokens</p></td></tr>';
+    }
+  }
+
+  function filterTokens() {
+    const q = document.getElementById('token-search').value.toLowerCase();
+    const filtered = allTokens.filter(t => t.code.toLowerCase().includes(q));
+    renderTokens(filtered);
+  }
+
+  function renderTokens(tokens) {
+    const tbody = document.getElementById('tokens-tbody');
+    document.getElementById('token-count').textContent = `${tokens.length} Token${tokens.length !== 1 ? 's' : ''}`;
+
+    if (!tokens.length) {
+      tbody.innerHTML = '<tr><td colspan="6"><div class="empty-state"><div class="icon">🎫</div><p>No tokens found</p></div></td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = tokens.map(t => {
+      const badge = t.status === 'active'  ? 'badge-green'  :
+                    t.status === 'used'    ? 'badge-gray'   :
+                    t.status === 'expired' ? 'badge-red'    : 'badge-yellow';
+      const created = t.created_at ? new Date(t.created_at).toLocaleString() : '—';
+      const usedAt  = t.used_at    ? new Date(t.used_at).toLocaleString()    : '—';
+      return `
+        <tr>
+          <td><div class="code-cell">
+            ${t.code}
+            <button class="copy-btn" title="Copy" onclick="copyCode(this,'${t.code}')">📋</button>
+          </div></td>
+          <td>${t.plan_id || '—'}</td>
+          <td><span class="badge ${badge}">${t.status}</span></td>
+          <td style="color:var(--muted);font-size:13px">${created}</td>
+          <td style="color:var(--muted);font-size:13px">${usedAt}</td>
+          <td style="color:var(--muted);font-size:13px;font-family:monospace">${t.used_by_mac || '—'}</td>
+        </tr>`;
+    }).join('');
+  }
+
+  function updateStats(tokens) {
+    const active  = tokens.filter(t => t.status === 'active').length;
+    const used    = tokens.filter(t => t.status === 'used').length;
+    document.getElementById('stat-active').textContent = active;
+    document.getElementById('stat-total').textContent  = tokens.length;
+    document.getElementById('stat-used').textContent   = used;
+  }
+
+  /* ─── Payments ───────────────────────────────── */
+  async function loadPayments() {
+    const url = '/api/admin/payments';
+    const overviewTbody = document.getElementById('overview-payments-tbody');
+    const paymentsTbody = document.getElementById('payments-tbody');
+
+    const loadingRow = '<tr><td colspan="6" style="text-align:center;padding:40px;color:var(--muted)"><span class="spinner"></span></td></tr>';
+    overviewTbody.innerHTML = loadingRow;
+    if (paymentsTbody) paymentsTbody.innerHTML = loadingRow;
+
+    try {
+      const res  = await fetch(url, { headers: { 'x-admin-key': ADMIN_KEY } });
+      const data = await res.json();
+      allPayments = data.payments || [];
+
+      // Update revenue stat
+      const revenue = allPayments
+        .filter(p => p.status === 'success')
+        .reduce((s, p) => s + parseFloat(p.amount || 0), 0);
+      document.getElementById('stat-revenue').textContent = '₦' + revenue.toLocaleString();
+
+      const rows = allPayments.slice(0, 50).map(p => {
+        const badge = p.status === 'success' ? 'badge-green' :
+                      p.status === 'failed'  ? 'badge-red'   : 'badge-yellow';
+        const date = p.created_at ? new Date(p.created_at).toLocaleString() : '—';
+        return `
+          <tr>
+            <td style="font-size:13px;color:var(--muted)">${date}</td>
+            <td>${p.email || '—'}</td>
+            <td>${p.plan_id || '—'}</td>
+            <td style="font-weight:600">₦${parseFloat(p.amount||0).toLocaleString()}</td>
+            <td><span class="badge ${badge}">${p.status}</span></td>
+            <td style="font-size:12px;font-family:monospace;color:var(--muted)">${(p.reference||'').slice(0,20)}…</td>
+          </tr>`;
+      }).join('');
+
+      const empty = '<tr><td colspan="6"><div class="empty-state"><div class="icon">💳</div><p>No payments yet</p></div></td></tr>';
+      overviewTbody.innerHTML = rows || empty;
+      if (paymentsTbody) {
+        document.getElementById('payment-count').textContent = `${allPayments.length} Payment${allPayments.length !== 1 ? 's' : ''}`;
+        paymentsTbody.innerHTML = rows || empty;
+      }
+    } catch {
+      const err = '<tr><td colspan="6" class="empty-state"><div class="icon">⚠️</div><p>Failed to load</p></div></td></tr>';
+      overviewTbody.innerHTML = err;
+      if (paymentsTbody) paymentsTbody.innerHTML = err;
+    }
+  }
+
+  /* ─── Generate ───────────────────────────────── */
+  function openGenModal(planId, label) {
+    currentPlanId = planId;
+    document.getElementById('gen-modal-subtitle').textContent = `Plan: ${label}`;
+    document.getElementById('gen-count').value = '5';
+    document.getElementById('gen-code-list').classList.remove('show');
+    document.getElementById('gen-code-list').innerHTML = '';
+    document.getElementById('gen-btn').innerHTML = '✨ Generate';
+    document.getElementById('gen-btn').disabled = false;
+    document.getElementById('gen-modal').classList.add('open');
+  }
+
+  function closeGenModal() {
+    document.getElementById('gen-modal').classList.remove('open');
+    currentPlanId = '';
+  }
+
+  async function doGenerate() {
+    const count = parseInt(document.getElementById('gen-count').value) || 1;
+    const btn = document.getElementById('gen-btn');
+    btn.innerHTML = '<span class="spinner"></span> Generating…';
+    btn.disabled = true;
+
+    try {
+      const res = await fetch('/api/admin/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-admin-key': ADMIN_KEY,
+        },
+        body: JSON.stringify({ planId: currentPlanId, count }),
+      });
+      const data = await res.json();
+      if (!data.success) throw new Error(data.error);
+
+      const list = document.getElementById('gen-code-list');
+      list.innerHTML = `
+        <div style="font-size:12px;color:var(--muted);margin-bottom:8px;font-weight:600">${data.codes.length} CODES GENERATED</div>
+        ${data.codes.map(c => `
+          <div class="code-list-item">
+            <span>${c}</span>
+            <button class="copy-btn" onclick="copyCode(this,'${c}')">📋</button>
+          </div>`).join('')}
+        <button class="btn btn-ghost btn-sm copy-all-btn" onclick="copyAll(${JSON.stringify(data.codes)})">📋 Copy All Codes</button>
+      `;
+      list.classList.add('show');
+
+      btn.innerHTML = '✨ Generate More';
+      btn.disabled = false;
+      toast('✅ ' + data.codes.length + ' codes generated!', 'success');
+    } catch (err) {
+      toast('❌ ' + err.message, 'error');
+      btn.innerHTML = '✨ Generate';
+      btn.disabled = false;
+    }
+  }
+
+  /* ─── Clipboard ──────────────────────────────── */
+  function copyCode(btn, code) {
+    navigator.clipboard.writeText(code).then(() => {
+      btn.textContent = '✅';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '📋'; btn.classList.remove('copied'); }, 1500);
+    });
+  }
+
+  function copyAll(codes) {
+    navigator.clipboard.writeText(codes.join('\n')).then(() => {
+      toast('📋 All codes copied!', 'success');
+    });
+  }
+
+  /* ─── Toast ──────────────────────────────────── */
+  let toastTimer;
+  function toast(msg, type = '') {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.className = 'show ' + type;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.className = '', 3000);
+  }
+
+  /* ─── Close modal on backdrop ─────────────────── */
+  document.getElementById('gen-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeGenModal();
+  });
+</script>
+</body>
+</html>
