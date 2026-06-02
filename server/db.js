@@ -62,6 +62,7 @@ async function initDb() {
         client_mac      VARCHAR(255) NOT NULL,
         plan_id         VARCHAR(255) NOT NULL,
         data_used       INTEGER DEFAULT 0,
+        last_activity_bytes BIGINT DEFAULT 0,
         notified_200mb  INTEGER DEFAULT 0,
         started_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         expires_at      TIMESTAMP NOT NULL
@@ -71,6 +72,9 @@ async function initDb() {
       CREATE INDEX IF NOT EXISTS idx_codes_code   ON access_codes(code);
       CREATE INDEX IF NOT EXISTS idx_codes_status ON access_codes(status);
       CREATE INDEX IF NOT EXISTS idx_pay_ref      ON payments(reference);
+
+      -- Migrations
+      ALTER TABLE sessions ADD COLUMN IF NOT EXISTS last_activity_bytes BIGINT DEFAULT 0;
     `);
     isInitialized = true;
   } catch (error) {
