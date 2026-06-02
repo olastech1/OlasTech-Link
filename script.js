@@ -279,6 +279,16 @@
       btnBuy.disabled = false;
       btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
     }
+    
+    // Enable and configure WhatsApp button
+    const whatsappBtn = document.getElementById('whatsappBuyBtn');
+    if (whatsappBtn) {
+      whatsappBtn.style.opacity = '1';
+      whatsappBtn.style.pointerEvents = 'auto';
+      
+      const message = `Hello OlasTech, I want to purchase the ${plan.name} Plan for ₦${plan.price.toLocaleString()}.\n\nMy MAC Address: ${portalConfig.clientMac}`;
+      whatsappBtn.href = `https://wa.me/2348162747882?text=${encodeURIComponent(message)}`;
+    }
   }
 
   // ── Buy Flow (Flutterwave) ────────────────────────────────────
