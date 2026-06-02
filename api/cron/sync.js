@@ -48,7 +48,7 @@ module.exports = async function (req, res) {
       if (!omadaClient) continue; // Client is not currently connected to WiFi
 
       // Calculate bytes used
-      const currentActivity = parseInt(omadaClient.activity || (omadaClient.trafficDown + omadaClient.trafficUp) || 0, 10);
+      const currentActivity = parseInt((omadaClient.download || 0) + (omadaClient.upload || 0), 10);
       const lastActivity = parseInt(session.last_activity_bytes || 0, 10);
 
       let deltaBytes = 0;
@@ -61,7 +61,7 @@ module.exports = async function (req, res) {
 
       if (deltaBytes === 0) continue;
 
-      const deltaMb = Math.floor(deltaBytes / (1024 * 1024));
+      const deltaMb = deltaBytes / (1024 * 1024);
       
       // We will only update if it's at least 1MB to save frequent tiny updates, 
       // but for accuracy we can update DB with bytes if we had a bytes column. 
