@@ -11,31 +11,6 @@
   // ── Plan Data (loaded from server) ────────────────────────────
   let PLANS = {};
 
-  // ── DOM References ────────────────────────────────────────────
-  const tabCode         = document.getElementById('tabCode');
-  const tabBuy          = document.getElementById('tabBuy');
-  const panelCode       = document.getElementById('panelCode');
-  const panelBuy        = document.getElementById('panelBuy');
-  const codeForm        = document.getElementById('codeForm');
-  const accessCodeInput = document.getElementById('accessCode');
-  const connectBtn      = document.getElementById('connectBtn');
-  const btnBuy          = document.getElementById('btnBuy');
-  const buyEmail        = document.getElementById('buyEmail');
-  const plansGrid       = document.getElementById('plansGrid');
-  const manualPaymentPanel = document.getElementById('manualPaymentPanel');
-  const manualAmountDisplay= document.getElementById('manualAmountDisplay');
-  const whatsappBtn     = document.getElementById('whatsappBtn');
-  const cancelManualBtn = document.getElementById('cancelManualBtn');
-  const errorMessage    = document.getElementById('errorMessage');
-  const errorText       = document.getElementById('errorText');
-  const successMessage  = document.getElementById('successMessage');
-  const successText     = document.getElementById('successText');
-  const successOverlay  = document.getElementById('successOverlay');
-  const ssidDisplay     = document.getElementById('ssidDisplay');
-  const switchToBuy     = document.getElementById('switchToBuy');
-  const switchToCode    = document.getElementById('switchToCode');
-  const sessionPlan     = document.getElementById('sessionPlan');
-  const sessionDuration = document.getElementById('sessionDuration');
   const sessionData     = document.getElementById('sessionData');
 
   function showSuccess(sessionInfo) {
@@ -143,8 +118,6 @@
     clientMac:   params.get('clientMac')   || params.get('client_mac')   || '',
     apMac:       params.get('apMac')       || params.get('ap_mac')       || '',
     ssidName:    params.get('ssidName')    || params.get('ssid')         || 'OlasTech_WiFi',
-    radioId:     params.get('radioId')     || params.get('radio_id')     || '0',
-    redirectUrl: params.get('redirectUrl') || params.get('redirect_url') || 'https://www.google.com',
   };
 
   // ── Initialize ────────────────────────────────────────────────
@@ -159,30 +132,11 @@
         data.plans.forEach(p => PLANS[p.id] = p);
         renderPlans(data.plans);
       } else {
-        plansGrid.innerHTML = '<div style="color:var(--red);text-align:center;width:100%;padding:20px">Failed to load plans.</div>';
+        if(plansGrid) plansGrid.innerHTML = '<div style="color:var(--red);text-align:center;width:100%;padding:20px">Failed to load plans.</div>';
       }
     } catch (e) {
-      plansGrid.innerHTML = '<div style="color:var(--red);text-align:center;width:100%;padding:20px">Failed to connect to server.</div>';
+      if(plansGrid) plansGrid.innerHTML = '<div style="color:var(--red);text-align:center;width:100%;padding:20px">Failed to connect to server.</div>';
     }
-
-    // Auto-fill code if coming back from Paystack callback
-    const codeParam = params.get('code');
-    const paidParam = params.get('paid');
-    const errParam  = params.get('error');
-
-    if (codeParam && paidParam) {
-      accessCodeInput.value = codeParam;
-      connectBtn.disabled = false;
-      switchTab('code');
-      showSuccess(`✅ Payment confirmed! Your code: ${codeParam} — Click Connect to go online.`);
-    }
-
-    if (errParam) {
-      switchTab('buy');
-      showError(errorMessages[errParam] || 'Something went wrong. Please try again.');
-    }
-
-    bindEvents();
   }
 
   function renderPlans(plansList) {
@@ -236,90 +190,6 @@
     });
   }
 
-  const errorMessages = {
-    payment_failed:    'Payment was not completed. Please try again.',
-    payment_not_found: 'Payment reference not found. Contact support.',
-    missing_reference: 'Payment reference missing. Please try again.',
-  };
-
-  // ── Events ────────────────────────────────────────────────────
-  function bindEvents() {
-    tabCode.addEventListener('click', () => switchTab('code'));
-    tabBuy.addEventListener('click', () => switchTab('buy'));
-    switchToBuy.addEventListener('click', (e) => { e.preventDefault(); switchTab('buy'); });
-    switchToCode.addEventListener('click', (e) => { e.preventDefault(); switchTab('code'); });
-
-    accessCodeInput.addEventListener('input', onCodeInput);
-    codeForm.addEventListener('submit', handleCodeSubmit);
-
-    // Plans grid click bindings are now handled inside renderPlans()
-    if (btnBuy) btnBuy.addEventListener('click', handleBuyClick);
-  }
-
-  // ── Tab Switching ─────────────────────────────────────────────
-  function switchTab(tab) {
-    hideError(); hideSuccess();
-    tabCode.classList.toggle('active', tab === 'code');
-    tabBuy.classList.toggle('active', tab === 'buy');
-    tabCode.setAttribute('aria-selected', tab === 'code');
-    tabBuy.setAttribute('aria-selected', tab === 'buy');
-    panelCode.classList.toggle('active', tab === 'code');
-    panelBuy.classList.toggle('active', tab === 'buy');
-    // Re-trigger panel animation
-    const panel = tab === 'code' ? panelCode : panelBuy;
-    panel.style.animation = 'none';
-    void panel.offsetHeight;
-    panel.style.animation = '';
-    if (tab === 'code') accessCodeInput.focus();
-  }
-
-  // ── Code Input ────────────────────────────────────────────────
-  function onCodeInput() {
-    connectBtn.disabled = accessCodeInput.value.trim().length === 0;
-    accessCodeInput.classList.remove('error');
-    hideError();
-  }
-
-  // ── Code Submission ───────────────────────────────────────────
-  async function handleCodeSubmit(e) {
-    e.preventDefault();
-    const code = accessCodeInput.value.trim().toUpperCase();
-    if (!code) {
-      showError('Please enter your access code.');
-      accessCodeInput.classList.add('error');
-      return;
-    }
-
-    setLoading(connectBtn, true, 'Connecting…');
-    hideError();
-
-    try {
-      const res = await fetch('/api/code/validate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          code,
-          clientMac: portalConfig.clientMac,
-          apMac:     portalConfig.apMac,
-          radioId:   portalConfig.radioId,
-          ssidName:  portalConfig.ssidName,
-        }),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || 'Invalid access code.');
-      }
-
-      onConnected(data);
-    } catch (err) {
-      setLoading(connectBtn, false, 'Connect to Internet');
-      showError(err.message);
-      accessCodeInput.classList.add('error');
-    }
-  }
-
   // ── Plan Selection ────────────────────────────────────────────
   function handlePlanClick(e) {
     const card = e.target.closest('.plan-card');
@@ -338,190 +208,11 @@
     if (whatsappBtn) {
       whatsappBtn.style.opacity = '1';
       whatsappBtn.style.pointerEvents = 'auto';
+      whatsappBtn.style.cursor = 'pointer';
       
       const message = `Hello OlasTech, I want to purchase the ${plan.name} Plan for ₦${plan.price.toLocaleString()}.\n\nMy MAC Address: ${portalConfig.clientMac}`;
       whatsappBtn.href = `https://wa.me/2348162747882?text=${encodeURIComponent(message)}`;
     }
-  }
-
-  // ── Buy Flow (Flutterwave) ────────────────────────────────────
-  async function handleBuyClick() {
-    if (!selectedPlan) { showError('Please select a plan first.'); return; }
-    
-    setLoading(btnBuy, true, 'Preparing payment…');
-    hideError();
-    const plan = PLANS[selectedPlan];
-    const emailStr = buyEmail ? buyEmail.value.trim() : '';
-
-    if (!emailStr) { 
-      setLoading(btnBuy, false);
-      btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
-      showError('Please enter your email address.'); 
-      return; 
-    }
-    
-    try {
-      // 1. Initialize payment on our backend
-      const res = await fetch('/api/pay/init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          planId:    selectedPlan,
-          email:     emailStr,
-          clientMac: portalConfig.clientMac,
-          apMac:     portalConfig.apMac,
-          radioId:   portalConfig.radioId,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error || 'Payment init failed.');
-
-      // Save reference so we can recover if modal closes without callback
-      localStorage.setItem('pending_tx_ref', data.reference);
-      localStorage.setItem('pending_tx_id', '');
-
-      setLoading(btnBuy, false);
-      btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
-
-      // 2. Open Flutterwave Inline Modal
-      if (window.FlutterwaveCheckout) {
-        FlutterwaveCheckout({
-          public_key: data.publicKey,
-          tx_ref: data.reference,
-          amount: data.amount,
-          currency: "NGN",
-          payment_options: "card,ussd",
-          customer: {
-            email: emailStr,
-            name: "OlasTech Customer",
-          },
-          customizations: {
-            title: "OlasTech Link",
-            description: `Payment for ${data.name} Plan`,
-          },
-          callback: async function (payment) {
-            // 3. Payment succeeded — verify on our backend
-            console.log("Flutterwave callback:", payment);
-            localStorage.setItem('pending_tx_id', payment.transaction_id || '');
-            setLoading(btnBuy, true, 'Verifying payment…');
-            await verifyAndComplete(payment.transaction_id, payment.tx_ref);
-          },
-          onclose: function() {
-            // Modal closed — check if payment went through
-            const savedRef = localStorage.getItem('pending_tx_ref');
-            const savedId  = localStorage.getItem('pending_tx_id');
-            if (savedId) {
-              // Payment was made, callback fired, verification in progress
-              return;
-            }
-            if (savedRef) {
-              // Modal closed without payment callback — show recovery option
-              setLoading(btnBuy, false);
-              btnBuy.textContent = `Pay ₦${plan.price.toLocaleString()} for Access`;
-              showError(
-                '⚠️ If you completed payment, click <strong style="cursor:pointer;text-decoration:underline" onclick="recoverPayment(\'' + savedRef + '\')">' +
-                'Recover My Code</strong> to get your access code.'
-              );
-            }
-          }
-        });
-      } else {
-        throw new Error('Payment system failed to load. Please refresh the page.');
-      }
-      
-    } catch (err) {
-      setLoading(btnBuy, false);
-      if (selectedPlan) {
-        const plan2 = PLANS[selectedPlan];
-        btnBuy.textContent = `Pay ₦${plan2.price.toLocaleString()} for Access`;
-      }
-      showError(err.message || 'Could not start payment. Check your connection.');
-    }
-  }
-
-  async function verifyAndComplete(transactionId, txRef) {
-    try {
-      const verifyRes = await fetch('/api/pay/callback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ transaction_id: transactionId, tx_ref: txRef })
-      });
-      const verifyData = await verifyRes.json();
-      if (!verifyRes.ok || !verifyData.success) {
-        throw new Error(verifyData.error || 'Payment verification failed.');
-      }
-      // Clear pending
-      localStorage.removeItem('pending_tx_ref');
-      localStorage.removeItem('pending_tx_id');
-      // Success — fill code and connect
-      accessCodeInput.value = verifyData.code;
-      connectBtn.disabled = false;
-      setLoading(btnBuy, false);
-      switchTab('code');
-      showSuccess(`✅ Payment confirmed! Your code: <strong>${verifyData.code}</strong> — click Connect below.`);
-    } catch (err) {
-      setLoading(btnBuy, false);
-      showError('❌ ' + err.message + ' — Email hi@olaniyi.me if you were charged.');
-    }
-  }
-
-  // Global: called from recover link in error message
-  window.recoverPayment = async function(txRef) {
-    setLoading(btnBuy, true, 'Recovering code…');
-    hideError();
-    try {
-      const res = await fetch('/api/pay/recover', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tx_ref: txRef })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) throw new Error(data.error);
-      localStorage.removeItem('pending_tx_ref');
-      accessCodeInput.value = data.code;
-      connectBtn.disabled = false;
-      setLoading(btnBuy, false);
-      switchTab('code');
-      showSuccess(`✅ Code recovered: <strong>${data.code}</strong> — click Connect below.`);
-    } catch(err) {
-      setLoading(btnBuy, false);
-      showError('Could not recover: ' + err.message + '. Email hi@olaniyi.me for help.');
-    }
-  };
-
-  // ── On Connected ──────────────────────────────────────────────
-  function onConnected(data) {
-    sessionPlan.textContent     = data.plan     || '—';
-    
-    // Calculate Remaining Time
-    if (data.sessionExpires) {
-      const expires = new Date(data.sessionExpires);
-      const diffMs = expires - new Date();
-      if (diffMs > 0) {
-        const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-        const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        sessionDuration.textContent = (diffDays > 0 ? diffDays + 'd ' : '') + diffHours + 'h';
-      } else {
-        sessionDuration.textContent = 'Expired';
-      }
-    } else {
-      sessionDuration.textContent = data.duration_h ? `${data.duration_h}h` : '—';
-    }
-
-    // Display Remaining Data
-    if (data.remaining_mb !== null && data.remaining_mb !== undefined) {
-      sessionData.textContent = `${(data.remaining_mb / 1024).toFixed(2)} GB`;
-    } else if (data.data_mb) {
-      sessionData.textContent = `${(data.data_mb / 1024).toFixed(2)} GB`;
-    } else {
-      sessionData.textContent = data.data_mb === null ? 'Unlimited' : '—';
-    }
-
-    successOverlay.classList.add('visible');
-
-    const redirect = data.redirectUrl || portalConfig.redirectUrl || 'https://www.google.com';
-    setTimeout(() => { window.location.href = redirect; }, 3500);
   }
 
   // ── UI Helpers ────────────────────────────────────────────────
