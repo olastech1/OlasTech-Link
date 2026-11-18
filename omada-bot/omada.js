@@ -68,7 +68,12 @@ class OmadaAPI {
         return false;
       }
       
-      const targetSite = sites.find(s => s.name === process.env.OMADA_SITE) || sites[0];
+      // Never fall back to another site: vouchers on the wrong site don't work on the hotspot.
+      const targetSite = sites.find(s => s.name === process.env.OMADA_SITE);
+      if (!targetSite) {
+        console.error(`Omada: site "${process.env.OMADA_SITE}" not found. Available: ${sites.map(s => s.name).join(', ')}`);
+        return false;
+      }
       this.siteId = targetSite.id;
       console.log('Omada site found:', targetSite.name, 'ID:', this.siteId);
 

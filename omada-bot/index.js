@@ -3,24 +3,33 @@ const { Telegraf, Markup } = require('telegraf');
 const express = require('express');
 const axios = require('axios');
 const omada = require('./omada');
+const wa = require('./whatsapp');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 
 const app = express();
-app.use(express.json());
+// Keep the raw body so WhatsApp webhook signatures can be checked.
+app.use(express.json({ verify: (req, _res, buf) => { req.rawBody = buf; } }));
 
-const token = process.env.TELEGRAM_BOT_TOKEN;
-const bot = new Telegraf(token);
+const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN);
+const SUPPORT_PHONE = process.env.SUPPORT_PHONE || '+234 816 274 7882';
+const TELEGRAM_URL = 'https://t.me/Olastech_bot';
+const WA_CHAT_URL = process.env.WA_DISPLAY_NUMBER ? `https://wa.me/${process.env.WA_DISPLAY_NUMBER}` : null;
 
+// hidden: no longer sold, but kept so older orders for it can still be fulfilled.
 const plans = {
-  '300gb': { name: '300GB', price: 35000, duration_h: 720, data_mb: 307200, devices: 10 },
-  '250gb': { name: '250GB', price: 20000, duration_h: 720, data_mb: 256000, devices: 5 },
-  '150gb': { name: '150GB', price: 15000, duration_h: 720, data_mb: 153600, devices: 4 },
-  '110gb': { name: '110GB', price: 12000, duration_h: 720, data_mb: 112640, devices: 4 },
   '50gb': { name: '50GB', price: 5000, duration_h: 720, data_mb: 51200, devices: 4 },
-  'weekend': { name: 'Weekend Unlimited', price: 10000, duration_h: 48, data_mb: 0, devices: 5 },
-  'daily': { name: 'Daily Unlimited', price: 3000, duration_h: 24, data_mb: 0, devices: 3 },
+  'weekend': { name: 'Weekend Unlimited', short: 'Weekend', price: 10000, duration_h: 48, data_mb: 0, devices: 5 },
+  '110gb': { name: '110GB', price: 12000, duration_h: 720, data_mb: 112640, devices: 4 },
+  '150gb': { name: '150GB', price: 15000, duration_h: 720, data_mb: 153600, devices: 4 },
+  '250gb': { name: '250GB', price: 20000, duration_h: 720, data_mb: 256000, devices: 5 },
+  '300gb': { name: '300GB', price: 35000, duration_h: 720, data_mb: 307200, devices: 10 },
+  'daily': { name: 'Daily Unlimited', price: 3000, duration_h: 24, data_mb: 0, devices: 3, hidden: true },
 };
+const forSale = () => Object.entries(plans).filter(([, p]) => !p.hidden);
+const naira = n => `₦${n.toLocaleString('en-NG')}`;
+const planDetail = p => `${p.duration_h >= 720 ? `${p.duration_h / 24} days` : `${p.duration_h} hours`} · ${p.devices} devices`;
 
 // ---- Persistent payment store -------------------------------------------
 // Survives restarts so a payment made while the bot restarts still gets its voucher.
@@ -34,7 +43,50 @@ function saveTxs() {
   fs.renameSync(tmp, STORE_FILE);
 }
 
-const inFlight = new Set(); // tx_refs currently being fulfilled (prevents duplicate vouchers)
+// ---- Messaging per channel ----------------------------------------------
+const messages = {
+  paid: p => `Payment confirmed. Generating your ${p.name} code, please wait…`,
+  code: (p, code) => ({
+    telegram: `*Your Wi-Fi code is ready*\n\nCode: \`${code}\`\nPlan: ${p.name}\nDevices: ${p.devices}\n\nConnect to OlasTech Wi-Fi and enter this code on the login page.`,
+    whatsapp: `*Your Wi-Fi code is ready*\n\nCode: *${code}*\nPlan: ${p.name}\nDevices: ${p.devices}\n\nConnect to OlasTech Wi-Fi and enter this code on the login page.`
+  }),
+  delayed: ref => `Your payment was received, but generating your code is taking longer than usual. We are retrying automatically and will send it here. Reference: ${ref}`
+};
+
+async function notify(tx, text) {
+  if (tx.channel === 'link' || tx.channel === 'manual') return; // shown on the order page / sent by the admin
+  const body = typeof text === 'object' ? text[tx.channel || 'telegram'] : text;
+  try {
+    if ((tx.channel || 'telegram') === 'whatsapp') await wa.sendText(tx.waId, body);
+    else await bot.telegram.sendMessage(tx.chatId, body, typeof text === 'object' ? { parse_mode: 'Markdown' } : {});
+  } catch (err) {
+    console.error('[notify] failed:', err.message);
+  }
+}
+
+// ---- Payments -----------------------------------------------------------
+async function createInvoice({ channel, userId, name, planId, returnRef }) {
+  const plan = plans[planId];
+  if (!plan || plan.hidden) throw new Error(`Unknown plan ${planId}`);
+  // Payment-link refs are also the customer's order-page address, so make them unguessable.
+  const tx_ref = channel === 'link'
+    ? `OlasTech-L-${Date.now()}-${crypto.randomBytes(8).toString('hex')}`
+    : `OlasTech-${channel === 'whatsapp' ? 'WA-' : ''}${Date.now()}-${userId}`;
+  const response = await axios.post('https://api.flutterwave.com/v3/payments', {
+    tx_ref,
+    amount: plan.price,
+    currency: 'NGN',
+    redirect_url: `${process.env.BASE_URL}/callback`,
+    customer: { email: `${userId}@olastech.com`, name: name || 'Customer' },
+    customizations: { title: 'OlasTech Wi-Fi', description: `Payment for ${plan.name} Wi-Fi Plan` }
+  }, { headers: { Authorization: `Bearer ${process.env.FLW_SECRET_KEY}` } });
+
+  if (response.data.status !== 'success') throw new Error('Flutterwave did not return a payment link');
+  const base = { channel, planId, amount: plan.price, status: 'pending', createdAt: Date.now() };
+  txs[tx_ref] = channel === 'whatsapp' ? { ...base, waId: userId } : channel === 'telegram' ? { ...base, chatId: userId } : base;
+  saveTxs();
+  return returnRef ? { link: response.data.data.link, tx_ref } : response.data.data.link;
+}
 
 async function verifyPayment(tx_ref, plan) {
   try {
@@ -56,6 +108,8 @@ async function verifyPayment(tx_ref, plan) {
   }
 }
 
+const inFlight = new Set(); // tx_refs currently being fulfilled (prevents duplicate vouchers)
+
 /** Verify a payment and issue exactly one voucher for it. Safe to call repeatedly. */
 async function fulfill(tx_ref, source) {
   const tx = txs[tx_ref];
@@ -74,21 +128,19 @@ async function fulfill(tx_ref, source) {
 
     if (tx.status !== 'voucher_failed') {
       tx.status = 'paid'; tx.transactionId = v.transactionId; tx.paidAt = new Date().toISOString(); saveTxs();
-      await bot.telegram.sendMessage(tx.chatId, `✅ *Payment Confirmed!*\n\nGenerating your ${plan.name} access code... Please wait.`, { parse_mode: 'Markdown' }).catch(() => {});
+      await notify(tx, messages.paid(plan));
     }
 
     const code = await omada.createVoucher(tx.planId, plan.data_mb, plan.duration_h, plan.devices);
     if (code) {
       tx.status = 'fulfilled'; tx.code = code; tx.fulfilledAt = new Date().toISOString(); saveTxs();
       console.log(`[pay] ${source}: ${tx_ref} fulfilled`);
-      await bot.telegram.sendMessage(tx.chatId, `🎉 *Your Wi-Fi Access Code is Ready!*\n\nCode: \`${code}\`\nPlan: ${plan.name}\nDevices Allowed: ${plan.devices}\n\nTo connect, connect to OlasTech Wi-Fi and enter this code. Enjoy!`, { parse_mode: 'Markdown' });
+      await notify(tx, messages.code(plan, code));
     } else {
       const firstFailure = tx.status !== 'voucher_failed';
       tx.status = 'voucher_failed'; tx.attempts = (tx.attempts || 0) + 1; saveTxs();
       console.error(`[pay] ${source}: ${tx_ref} PAID but voucher creation failed (attempt ${tx.attempts}); will retry`);
-      if (firstFailure) {
-        await bot.telegram.sendMessage(tx.chatId, `⚠️ Your payment was received, but we hit a problem generating your code. We are retrying automatically and will send it here shortly. Reference: ${tx_ref}`).catch(() => {});
-      }
+      if (firstFailure) await notify(tx, messages.delayed(tx_ref));
     }
   } catch (err) {
     console.error(`[pay] ${source}: error fulfilling ${tx_ref}:`, err.message);
@@ -109,135 +161,134 @@ async function sweep() {
   }
 }
 
+async function balanceText(code) {
+  const bal = await omada.getVoucherBalance(code);
+  if (!bal) return `Could not find code ${code}. Check that it is typed correctly.`;
+  const status = bal.status === 0 ? 'Unused' : (bal.status === 1 ? 'Active' : 'Expired');
+  const usedMB = bal.used / (1024 * 1024);
+  let msg = `Balance for ${code}\n\nStatus: ${status}\n`;
+  if (bal.quota > 0) {
+    msg += `Data: ${usedMB.toFixed(0)} MB used of ${bal.quota} MB (${Math.max(0, bal.quota - usedMB).toFixed(0)} MB left)\n`;
+  } else {
+    msg += `Data: unlimited (${usedMB.toFixed(0)} MB used)\n`;
+  }
+  return msg + `Time limit: ${bal.duration} minutes`;
+}
+
+// ---- Telegram -----------------------------------------------------------
 function showMainMenu(ctx) {
   ctx.replyWithMarkdown(
-    `Welcome to *OlasTech Wi-Fi*! 🚀\n\nI am your automated assistant. I can help you buy Wi-Fi access codes instantly.`,
-    Markup.keyboard([
-      ['📦 View Plans'],
-      ['📊 Check Balance', '📞 Support'],
-      ['🚀 Start']
-    ]).resize()
+    `Welcome to *OlasTech Wi-Fi*.\n\nBuy a Wi-Fi code here, or send your 8-digit code to check its balance.`,
+    Markup.keyboard([['📦 View Plans'], ['📊 Check Balance', '📞 Support'], ['🚀 Start']]).resize()
   );
+}
+function showPlans(ctx) {
+  const buttons = forSale().map(([id, p]) => [Markup.button.callback(`${p.name} - ${naira(p.price)}`, `buy_${id}`)]);
+  ctx.reply('Choose a plan:', Markup.inlineKeyboard(buttons));
 }
 
 bot.command('start', showMainMenu);
 bot.hears('🚀 Start', showMainMenu);
-
-bot.hears('📦 View Plans', (ctx) => {
-  const buttons = Object.keys(plans).map(key => {
-    return [Markup.button.callback(`${plans[key].name} - ₦${plans[key].price.toLocaleString()}`, `buy_${key}`)];
-  });
-  ctx.reply('Please choose a data plan:', Markup.inlineKeyboard(buttons));
-});
-
-bot.hears('📊 Check Balance', (ctx) => {
-  ctx.reply('To check your balance, simply send your 8-digit access code (e.g. 12345678) in the chat.');
-});
-
-bot.hears('📞 Support', (ctx) => {
-  ctx.reply('For support, please contact our support team or admin.');
-});
-
-bot.command('plans', (ctx) => {
-  const buttons = Object.keys(plans).map(key => {
-    return [Markup.button.callback(`${plans[key].name} - ₦${plans[key].price.toLocaleString()}`, `buy_${key}`)];
-  });
-
-  ctx.reply('Please choose a data plan:', Markup.inlineKeyboard(buttons));
-});
-
-async function checkBalance(ctx, code) {
-  await ctx.reply(`Checking balance for code ${code}...`);
-  const bal = await omada.getVoucherBalance(code);
-  
-  if (!bal) {
-      return ctx.reply(`❌ Could not find voucher ${code}. Make sure it is typed correctly.`);
-  }
-
-  let statusText = bal.status === 0 ? "Unused" : (bal.status === 1 ? "Active" : "Expired");
-  
-  let msg = `📊 *Balance for ${code}*\n\n`;
-  msg += `Status: ${statusText}\n`;
-  
-  if (bal.quota > 0) {
-      const usedMB = (bal.used / (1024 * 1024)).toFixed(2);
-      msg += `Data Quota: ${bal.quota} MB\n`;
-      msg += `Data Used: ${usedMB} MB\n`;
-      msg += `Data Remaining: ${(bal.quota - usedMB).toFixed(2)} MB\n`;
-  } else {
-      msg += `Data Quota: Unlimited\n`;
-      msg += `Data Used: ${(bal.used / (1024 * 1024)).toFixed(2)} MB\n`;
-  }
-  
-  msg += `Time Limit: ${bal.duration} minutes`;
-
-  ctx.replyWithMarkdown(msg);
-}
-
+bot.hears('📦 View Plans', showPlans);
+bot.command('plans', showPlans);
+bot.hears('📊 Check Balance', ctx => ctx.reply('Send your 8-digit code (for example 12345678) to check its balance.'));
+bot.hears('📞 Support', ctx => ctx.reply(`For help, call or WhatsApp ${SUPPORT_PHONE}.`));
 bot.command('balance', async (ctx) => {
-  const parts = ctx.message.text.split(' ');
-  if (parts.length < 2) {
-      return ctx.reply('Please provide your access code. Example: /balance 12345678');
-  }
-  const code = parts[1];
-  await checkBalance(ctx, code);
+  const code = ctx.message.text.split(' ')[1];
+  if (!code) return ctx.reply('Send your code with the command, for example: /balance 12345678');
+  await ctx.reply(await balanceText(code));
 });
-
-bot.hears(/^[a-zA-Z0-9]{8}$/, async (ctx) => {
-  const code = ctx.message.text;
-  await checkBalance(ctx, code);
-});
+bot.hears(/^[a-zA-Z0-9]{8}$/, async ctx => ctx.reply(await balanceText(ctx.message.text)));
 
 bot.action(/buy_(.+)/, async (ctx) => {
   const planId = ctx.match[1];
   const plan = plans[planId];
-  if (!plan) return;
-
-  const chatId = ctx.chat.id;
-  await ctx.replyWithMarkdown(`Generating your invoice for *${plan.name}* (₦${plan.price.toLocaleString()})...`);
-
-  const tx_ref = `OlasTech-${Date.now()}-${chatId}`;
-  
+  await ctx.answerCbQuery().catch(() => {});
+  if (!plan || plan.hidden) return ctx.reply('That plan is no longer available. Tap View Plans to see current plans.');
+  await ctx.replyWithMarkdown(`Creating your payment link for *${plan.name}* (${naira(plan.price)})…`);
   try {
-    const response = await axios.post('https://api.flutterwave.com/v3/payments', {
-      tx_ref: tx_ref,
-      amount: plan.price,
-      currency: 'NGN',
-      redirect_url: `${process.env.BASE_URL}/callback`,
-      customer: {
-        email: `${chatId}@olastech.com`,
-        name: ctx.from.first_name || 'Customer'
-      },
-      customizations: {
-        title: 'OlasTech Wi-Fi',
-        description: `Payment for ${plan.name} Wi-Fi Plan`
-      }
-    }, {
-      headers: {
-        Authorization: `Bearer ${process.env.FLW_SECRET_KEY}`
-      }
-    });
-
-    if (response.data.status === 'success') {
-      const link = response.data.data.link;
-      txs[tx_ref] = { chatId, planId, amount: plan.price, status: 'pending', createdAt: Date.now() };
-      saveTxs();
-      await ctx.reply(`Click the link below to pay securely via Flutterwave. Your voucher will be sent here automatically as soon as payment is confirmed!\n\n${link}`);
-    } else {
-      await ctx.reply(`Failed to generate payment link. Please try again later.`);
-    }
+    const link = await createInvoice({ channel: 'telegram', userId: ctx.chat.id, name: ctx.from.first_name, planId });
+    await ctx.reply(`Pay securely with Flutterwave using the link below. Your code will be sent here as soon as payment is confirmed.\n\n${link}`);
   } catch (error) {
-    console.error(error);
-    await ctx.reply(`An error occurred while generating your invoice.`);
+    console.error('[telegram] invoice error:', error.message);
+    await ctx.reply('Could not create a payment link. Please try again shortly.');
   }
-  await ctx.answerCbQuery();
 });
 
-app.get('/callback', async (req, res) => {
+// ---- WhatsApp -----------------------------------------------------------
+const seenWaMessages = new Map(); // message id -> time, Meta may deliver the same message twice
+
+async function waShowPlans(to) {
+  await wa.sendList(to, {
+    body: 'Choose a Wi-Fi plan. You will get a payment link, and your code is sent here after payment.',
+    button: 'View plans',
+    rows: forSale().map(([id, p]) => ({ id: `buy_${id}`, title: `${p.short || p.name} - ${naira(p.price)}`.slice(0, 24), description: (p.data_mb ? "" : "Unlimited data · ") + planDetail(p) }))
+  });
+}
+
+async function waHandle(msg) {
+  const to = msg.from;
+  const text = msg.text.toLowerCase();
+
+  if (msg.replyId && msg.replyId.startsWith('buy_')) {
+    const planId = msg.replyId.slice(4);
+    const plan = plans[planId];
+    if (!plan || plan.hidden) return wa.sendText(to, 'That plan is no longer available. Send "plans" to see current plans.');
+    try {
+      const link = await createInvoice({ channel: 'whatsapp', userId: to, name: msg.name, planId });
+      return wa.sendText(to, `${plan.name} - ${naira(plan.price)}\n\nPay securely with Flutterwave here:\n${link}\n\nYour Wi-Fi code will be sent to this chat as soon as payment is confirmed.`);
+    } catch (err) {
+      console.error('[wa] invoice error:', err.message);
+      return wa.sendText(to, 'Could not create a payment link. Please try again shortly.');
+    }
+  }
+
+  const code = msg.text.replace(/\s+/g, '');
+  if (/^\d{8}$/.test(code) || text.startsWith('balance')) {
+    const c = text.startsWith('balance') ? msg.text.split(/\s+/)[1] : code;
+    if (!c) return wa.sendText(to, 'Send your 8-digit code to check its balance, for example: 12345678');
+    return wa.sendText(to, await balanceText(c));
+  }
+
+  if (/^(help|support)/.test(text)) return wa.sendText(to, `For help, call ${SUPPORT_PHONE}.`);
+
+  // Anything else (hi, plans, menu, …): show the plans.
+  await wa.sendText(to, 'Welcome to OlasTech Wi-Fi.\n\nPick a plan below to buy a code. To check a code you already have, send the 8 digits.');
+  return waShowPlans(to);
+}
+
+// Meta's one-time webhook verification
+app.get('/whatsapp/webhook', (req, res) => {
+  if (req.query['hub.mode'] === 'subscribe' && process.env.WA_VERIFY_TOKEN && req.query['hub.verify_token'] === process.env.WA_VERIFY_TOKEN) {
+    return res.status(200).send(String(req.query['hub.challenge']));
+  }
+  res.sendStatus(403);
+});
+
+app.post('/whatsapp/webhook', (req, res) => {
+  if (!wa.validSignature(req)) {
+    console.warn('[wa] webhook rejected: bad or missing signature');
+    return res.sendStatus(401);
+  }
+  res.sendStatus(200); // acknowledge fast; Meta retries slow responses
+  if (!wa.enabled()) return;
+  const now = Date.now();
+  for (const [id, t] of seenWaMessages) if (now - t > 3600e3) seenWaMessages.delete(id);
+  for (const msg of wa.parseMessages(req.body)) {
+    if (seenWaMessages.has(msg.id)) continue;
+    seenWaMessages.set(msg.id, now);
+    waHandle(msg).catch(err => console.error('[wa] handler error:', err.message));
+  }
+});
+
+// ---- Flutterwave --------------------------------------------------------
+app.get('/callback', (req, res) => {
   const { status, tx_ref } = req.query;
   console.log('Callback Received:', { status, tx_ref });
-  // Redirect immediately; fulfilment verifies the payment itself, so query params are not trusted.
-  res.redirect('https://t.me/Olastech_bot');
+  const tx = tx_ref && txs[String(tx_ref)];
+  // Send the customer back to the chat they paid from. Fulfilment verifies the payment itself.
+  if (tx && tx.channel === 'link') res.redirect(`/order/${encodeURIComponent(String(tx_ref))}`);
+  else res.redirect(tx && tx.channel === 'whatsapp' && WA_CHAT_URL ? WA_CHAT_URL : TELEGRAM_URL);
   if (tx_ref && (status === 'successful' || status === 'completed')) fulfill(String(tx_ref), 'callback');
 });
 
@@ -254,9 +305,12 @@ app.post('/webhook', (req, res) => {
   if (payload.event === 'charge.completed' && tx_ref) fulfill(String(tx_ref), 'webhook');
 });
 
+require('./admin')(app, { plans, forSale, createInvoice, txs, saveTxs, omada, naira, planDetail });
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
   console.log(`Webhook server listening on port ${PORT}`);
+  console.log(`WhatsApp: ${wa.enabled() ? 'enabled' : 'disabled (set WA_PHONE_NUMBER_ID and WA_ACCESS_TOKEN)'}`);
   await omada.login();
   console.log('Omada API Ready');
   sweep();
