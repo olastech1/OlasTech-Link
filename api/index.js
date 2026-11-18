@@ -22,8 +22,6 @@ app.post('/api/pay/callback', require('../routes/pay/callback'));
 app.post('/api/pay/recover', require('../routes/pay/recover'));
 
 // Cron Routes
-app.get('/api/cron/poller', require('../routes/cron/poller'));
-app.get('/api/cron/sync', require('../routes/cron/sync'));
 app.get('/api/cron/test', require('../routes/cron/test'));
 app.get('/api/cron/migrate', require('../routes/cron/migrate'));
 

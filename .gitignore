@@ -5,3 +5,6 @@ node_modules/
 *.sqlite3
 .vercel
 .env*
+omada-bot/transactions.json
+omada-bot/transactions.json.tmp
+omada-bot/backup-*/

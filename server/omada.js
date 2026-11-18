@@ -131,17 +131,6 @@ async function authorizeClient({ clientMac, apMac, ssidName, radioId, duration }
   return true;
 }
 
-/**
- * Convenience wrapper — authorizes with dynamic duration per plan.
- */
-async function grantAccess({ clientMac, apMac, ssidName, radioId, duration_h }) {
-  // If duration_h is null/undefined (unlimited), authorize for ~10 years
-  const duration = duration_h ? duration_h * 60 : 5256000;
-
-  await authorizeClient({ clientMac, apMac, ssidName, radioId, duration });
-
-  return { duration };
-}
 
 /**
  * Get active client stats for data tracking.
@@ -266,4 +255,4 @@ async function createVouchers({ count = 1, duration_h, data_mb, devices = 1 }) {
   return created.map(v => v.code || v.voucherCode);
 }
 
-module.exports = { authorizeClient, grantAccess, getClientStats, unauthorizeClient, createVouchers };
+module.exports = { authorizeClient, getClientStats, unauthorizeClient, createVouchers };

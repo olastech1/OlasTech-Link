@@ -8,6 +8,8 @@ const crypto = require('crypto');
 
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 0, 1 (ambiguous)
 
+const omada = require('./omada');
+
 async function codeExists(code) {
   const result = await db.query('SELECT 1 FROM access_codes WHERE code = $1', [code]);
   return result.rows.length > 0;
@@ -15,6 +17,7 @@ async function codeExists(code) {
 
 /**
  * Generate a unique access code for a given plan.
+ * NOW GENERATES OMADA NATIVE VOUCHERS.
  */
 async function generateCode(planId, paymentRef, email = null) {
   const res = await db.query('SELECT * FROM plans WHERE id = $1', [planId]);
@@ -22,18 +25,28 @@ async function generateCode(planId, paymentRef, email = null) {
   if (!plan) throw new Error(`Unknown plan: ${planId}`);
 
   let code;
-  let attempts = 0;
-  const prefix = (plan.name || 'C').charAt(0).toUpperCase();
+  
+  try {
+    console.log(`Generating native Omada voucher for plan: ${plan.name}`);
+    const vouchers = await omada.createVouchers({
+      count: 1,
+      duration_h: plan.duration_h,
+      data_mb: plan.data_mb,
+      devices: plan.devices || 1
+    });
+    
+    if (!vouchers || vouchers.length === 0) {
+      throw new Error('Omada API returned empty vouchers array');
+    }
+    
+    code = vouchers[0]; // The 8-digit Omada PIN
+  } catch (omadaErr) {
+    console.error("Omada Native Voucher Generation Failed:", omadaErr.message);
+    throw new Error(`Failed to generate Omada Voucher: ${omadaErr.message}. Ensure your Omada Portal Authentication Type is set to 'Voucher'.`);
+  }
 
-  do {
-    if (attempts++ > 50) throw new Error('Failed to generate unique code');
-    code = `${prefix}${randomChars(3)}-${randomChars(4)}`;
-  } while (await codeExists(code));
-
-  // Data plans never expire by time until data is used. Time-based plans expire based on duration.
   let expiresAt = null;
   if (!plan.data_mb) {
-    // If it's an unlimited data plan (daily/weekend), give them 30 days to START using it
     expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   }
 
